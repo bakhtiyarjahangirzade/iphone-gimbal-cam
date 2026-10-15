@@ -16,6 +16,7 @@ from pathlib import Path
 import cv2
 
 from .gimbal import Gimbal
+from .scan import SCAN_PORT, ScanSession
 from .server import RECORDINGS_DIR, PhoneServer, new_token
 from .tracker import FollowController, Tracker
 
@@ -108,14 +109,18 @@ class Core:
             on_file=self._on_file,
             on_connection=self._on_connection)
         self.gimbal = Gimbal(on_status=self._on_gimbal_status, on_info=self._on_gimbal_info)
+        self.scan = ScanSession(self)
         self.qr_png = None
+        self.scan_qr_png = None
 
     # ---------------- lifecycle ----------------
 
     def start(self):
+        self.server.extra_sites.append((self.scan.make_app(), "0.0.0.0", SCAN_PORT))
         self.server.start()
         self.server.started.wait(timeout=10)
         self.qr_png = self._make_qr()
+        self.scan_qr_png = self._make_qr(self.scan.qr_text())
         threading.Thread(target=self._worker, daemon=True).start()
         self._apply_follow_settings()
 
@@ -163,9 +168,9 @@ class Core:
     def phone_url(self):
         return f"{self.server.url}&l={self.settings['lang']}"
 
-    def _make_qr(self):
+    def _make_qr(self, text=None):
         import qrcode
-        img = qrcode.make(self.phone_url(), box_size=10, border=2)
+        img = qrcode.make(text or self.phone_url(), box_size=10, border=2)
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
@@ -190,6 +195,8 @@ class Core:
                 "mbps": round(self.server.stats_mbps, 1),
             },
             "qr": self.qr_png,
+            "scan_qr": self.scan_qr_png,
+            "scan": self.scan.state(),
             "url": self.phone_url(),
             "recordings_dir": str(RECORDINGS_DIR),
         }
@@ -199,7 +206,12 @@ class Core:
     def command(self, c):
         cmd = c.get("cmd")
         v = c.get("value")
+        if cmd and (cmd.startswith("scan_") or cmd.startswith("sweep_")):
+            self.scan.command(c)
+            self._bump()
+            return
         if cmd == "stop":                       # emergency stop: all motion + tracking off
+            self.scan.stop_sweep()
             self.manual.clear()
             self.track_mode = "off"
             self.tracker.mode = "off"
@@ -208,6 +220,7 @@ class Core:
         elif cmd == "pause":
             self.paused = bool(v)
             if self.paused:
+                self.scan.stop_sweep()
                 self.manual.clear()
                 self.gimbal.stop()
                 self.follow.reset()
@@ -241,7 +254,9 @@ class Core:
                 self._apply_follow_settings()
                 if k == "lang" and v in LANGS:
                     self.qr_png = self._make_qr()
+                    self.scan_qr_png = self._make_qr(self.scan.qr_text())
                     self.server.send_json({"cmd": "lang", "value": v})
+                    self.scan.send({"cmd": "lang", "value": v})
                 if k == "vcam_on" and not v:
                     self.vcam.close()
                     self.vcam_state = {"ok": None, "error": ""}
