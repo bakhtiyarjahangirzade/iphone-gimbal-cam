@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GimbalCam · 3D</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+.view3d{position:absolute;inset:0}
+.view3d canvas{display:block}
+.lbl3d{font:600 11px "Segoe UI",sans-serif;color:#e9edf3;background:rgba(15,18,23,.78);border:1px solid #313846;border-radius:6px;padding:2px 6px;white-space:nowrap;pointer-events:none}
+.lbl3d.len{color:#cfe0ff;border-color:rgba(79,140,255,.5)}
+.viewtools{position:absolute;top:12px;inset-inline-end:12px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.viewtools .seg{background:rgba(13,15,19,.85)}
+.instr{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(251,191,36,.95);color:#1b1300;font-weight:700;border-radius:10px;padding:7px 14px;display:none}
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--mut);font-size:11.5px}
+.bar{height:6px;border-radius:6px;background:#2a303b;overflow:hidden;margin-top:10px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+.files{margin:8px 0 0;padding:0;list-style:none;font-size:12px;color:var(--mut);display:grid;gap:3px}
+.files li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bigbtn{width:100%;justify-content:center;height:40px}
+.stagebar{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+</style>
+<script type="importmap">{"imports":{"three":"/vendor/three.module.min.js"}}</script>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><div class="logo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg></div>GimbalCam</div>
+    <nav class="tabs"><a href="/" data-i="tab_camera"></a><a href="/scan" class="sel" data-i="tab_scan"></a></nav>
+    <span class="pill"><span class="dot" id="phoneDot"></span><span data-i="scan_phone"></span> <b id="phoneTxt"></b></span>
+    <span class="pill"><span class="dot" id="gimbalDot"></span><span data-i="gimbal"></span> <b id="gimbalTxt"></b></span>
+    <span class="pill">yaw <b id="yawTxt">—</b> · pitch <b id="pitchTxt">—</b></span>
+    <div class="spacer"></div>
+    <select class="lang" id="lang" aria-label="Language">
+      <option value="tr">Türkçe</option><option value="en">English</option><option value="es">Español</option>
+      <option value="ru">Русский</option><option value="zh">中文</option><option value="ar">العربية</option>
+    </select>
+    <button class="stopbtn" id="stopBtn" data-it="stop_tip"><svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span data-i="stop"></span></button>
+    <button class="iconbtn" id="quitBtn" data-it="quit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg></button>
+  </header>
+
+  <div class="main">
+    <section class="stagewrap">
+      <div class="stage" id="stage" style="display:block">
+        <div class="view3d" id="view"></div>
+        <div class="viewtools">
+          <div class="seg" id="viewSeg"><button data-v="3d" class="sel" data-i="view_3d"></button><button data-v="plan" data-i="view_plan"></button></div>
+          <div class="seg" id="layerSeg"><button data-v="room" class="sel" data-i="layer_room"></button><button data-v="mesh" class="sel" data-i="layer_mesh"></button><button data-v="wire" data-i="wireframe"></button></div>
+          <button class="btn" id="fitBtn" data-i="fit"></button>
+        </div>
+        <div class="instr" id="instr"></div>
+        <div class="overlay" id="qrOverlay">
+          <div class="qrcard">
+            <img id="qr" alt="QR">
+            <div>
+              <h2 data-i="scan_qr_title"></h2>
+              <ol class="steps">
+                <li><span class="n">1</span><span data-i="scan_step1"></span></li>
+                <li><span class="n">2</span><span data-i="scan_step2"></span></li>
+                <li><span class="n">3</span><span data-i="scan_step3"></span></li>
+              </ol>
+              <p class="small" style="margin:14px 0 0" data-i="same_wifi"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="stagebar">
+        <div class="seg" id="modeSeg"><button data-v="room" data-i="mode_room"></button><button data-v="mesh" data-i="mode_mesh"></button></div>
+        <button class="recbtn" id="scanBtn"><span class="c"></span><span id="scanBtnTxt"></span></button>
+        <span class="lbl" id="scanInfo"></span>
+        <div class="spacer"></div>
+        <button class="btn ghost" id="clearBtn" data-i="clear"></button>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card">
+        <h3 data-i="stats_title"></h3>
+        <div class="statgrid">
+          <div class="stat"><b id="stArea">—</b><span data-i="st_area"></span></div>
+          <div class="stat"><b id="stSize">—</b><span data-i="st_size"></span></div>
+          <div class="stat"><b id="stWalls">0</b><span data-i="st_walls"></span></div>
+          <div class="stat"><b id="stDoorsWin">0 · 0</b><span><span data-i="st_doors"></span> · <span data-i="st_windows"></span></span></div>
+          <div class="stat"><b id="stObjects">0</b><span data-i="st_objects"></span></div>
+          <div class="stat"><b id="stTris">0</b><span data-i="st_tris"></span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span data-i="auto_title"></span><span class="st" id="swStatus"></span></h3>
+        <div class="row">
+          <button class="btn primary" id="swStart" style="flex:1;justify-content:center" data-i="auto_start"></button>
+          <button class="btn" id="swStop" data-i="auto_stop"></button>
+        </div>
+        <div class="slider"><label data-i="auto_speed"></label><input type="range" min="0.08" max="0.6" step="0.01" id="swSpeed" data-f="pct"><output></output></div>
+        <div class="row"><span class="lbl"><span data-i="auto_levels"></span>: +20° · 0° · −20°</span></div>
+        <div class="bar"><i id="swBar"></i></div>
+        <div class="hint" data-i="auto_hint"></div>
+      </div>
+
+      <div class="card">
+        <h3><span data-i="gimbal_card"></span><span class="st"><span class="dot" id="gDot2"></span><span id="gStatus"></span></span></h3>
+        <div class="row">
+          <button class="btn primary" id="gConnect"></button>
+          <div class="chips" id="gModes">
+            <button class="chip" data-v="PF">PF</button><button class="chip" data-v="L">L</button><button class="chip" data-v="F">F</button><button class="chip" data-v="POV">POV</button><button class="chip" data-v="GO">GO</button>
+          </div>
+        </div>
+        <div class="pad">
+          <span></span><button data-d="up">▲</button><span></span>
+          <button data-d="left">◀</button><button class="c" id="padStop">■</button><button data-d="right">▶</button>
+          <span></span><button data-d="down">▼</button><span></span>
+        </div>
+        <div class="slider"><label data-i="manual_speed"></label><input type="range" min="0.05" max="1" step="0.01" data-k="manual_speed"><output></output></div>
+      </div>
+
+      <div class="card">
+        <h3 data-i="export_title"></h3>
+        <div class="row">
+          <button class="btn primary" id="expBtn" style="flex:1;justify-content:center" data-i="export_btn"></button>
+          <button class="btn" id="expOpen" data-i="export_open"></button>
+        </div>
+        <div class="hint" id="expInfo"></div>
+        <ul class="files" id="expFiles"></ul>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    <span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> <span data-i="k_gimbal"></span></span>
+    <span><kbd>Esc</kbd> <span data-i="stop"></span></span>
+    <span><kbd>A</kbd> <span data-i="k_auto"></span></span>
+    <span><kbd>V</kbd> <span data-i="k_view"></span></span>
+  </footer>
+</div>
+<div class="disc" id="disc"><span data-i="disconnected"></span></div>
+
+<script src="/i18n.js"></script>
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "/vendor/OrbitControls.js";
+import { CSS2DRenderer, CSS2DObject } from "/vendor/CSS2DRenderer.js";
+
+const I18N = window.I18N;
+const $ = id => document.getElementById(id);
+let lang = "tr", S = null, ws = null;
+const t = (k, vars) => { let s = (I18N[lang] && I18N[lang][k]) ?? I18N.en[k] ?? k; if (vars) for (const [a, b] of Object.entries(vars)) s = s.replace("{" + a + "}", b); return s; };
+
+// ---------------------------------------------------------------- three.js scene
+const host = $("view");
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x07090c);
+host.appendChild(renderer.domElement);
+const labels = new CSS2DRenderer();
+labels.domElement.style.position = "absolute"; labels.domElement.style.inset = "0"; labels.domElement.style.pointerEvents = "none";
+host.appendChild(labels.domElement);
+
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x1a1d24, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(3, 8, 4); scene.add(sun);
+const grid = new THREE.GridHelper(20, 40, 0x2a3140, 0x171b22); scene.add(grid);
+
+const persp = new THREE.PerspectiveCamera(55, 1, 0.02, 200);
+persp.position.set(4, 4, 6);
+const ortho = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.01, 200);
+ortho.position.set(0, 30, 0); ortho.up.set(0, 0, -1); ortho.lookAt(0, 0, 0);
+let camera = persp;
+const controls = new OrbitControls(persp, renderer.domElement);
+controls.enableDamping = true;
+const ocontrols = new OrbitControls(ortho, renderer.domElement);
+ocontrols.enableRotate = false; ocontrols.enabled = false;
+
+const roomGroup = new THREE.Group(); scene.add(roomGroup);
+const meshGroup = new THREE.Group(); scene.add(meshGroup);
+const meshMat = new THREE.MeshStandardMaterial({ color: 0x8fb4ff, roughness: 0.85, metalness: 0, side: THREE.DoubleSide, flatShading: true });
+const anchors = new Map();   // uuid hex -> THREE.Mesh
+
+// phone marker + trail
+const phone = new THREE.Group();
+const body = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.2, 4), new THREE.MeshBasicMaterial({ color: 0x34d399, wireframe: true }));
+body.rotation.x = -Math.PI / 2; body.position.z = -0.1; phone.add(body);
+phone.visible = false; scene.add(phone);
+const trailPts = [];
+const trail = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.6 }));
+scene.add(trail);
+
+function resize() {
+  const w = host.clientWidth, h = host.clientHeight;
+  renderer.setSize(w, h); labels.setSize(w, h);
+  persp.aspect = w / h; persp.updateProjectionMatrix();
+  const span = ortho.userData.span || 8;
+  ortho.left = -span * w / h / 2; ortho.right = span * w / h / 2; ortho.top = span / 2; ortho.bottom = -span / 2; ortho.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(host);
+renderer.setAnimationLoop(() => { (camera === persp ? controls : ocontrols).update(); renderer.render(scene, camera); labels.render(scene, camera); });
+
+// ---------------------------------------------------------------- room (RoomPlan)
+const COLORS = { walls: 0xd8dee9, doors: 0xd97706, windows: 0x38bdf8, openings: 0x9ca3af };
+const objMat = new THREE.MeshStandardMaterial({ color: 0xc9a97a, transparent: true, opacity: 0.55 });
+function clearGroup(g) {
+  for (const c of [...g.children]) {
+    c.traverse(o => { if (o.isCSS2DObject && o.element) o.element.remove(); if (o.geometry) o.geometry.dispose(); });
+    g.remove(c);
+  }
+}
+let lastRoom = null;
+function buildRoom(r) {
+  lastRoom = r;
+  clearGroup(roomGroup);
+  for (const key of ["walls", "doors", "windows", "openings"]) {
+    for (const s of r[key] || []) {
+      const [w, h] = s.dims;
+      const depth = key === "walls" ? 0.08 : 0.1;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, depth),
+        new THREE.MeshStandardMaterial({ color: COLORS[key], transparent: true, opacity: key === "walls" ? 0.42 : 0.8,
+          depthWrite: key !== "walls", side: THREE.DoubleSide }));
+      const mat = new THREE.Matrix4().fromArray(s.t);
+      m.applyMatrix4(mat);
+      if (key === "walls") {
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: 0x5b6475 }));
+        m.add(edges);
+        const div = document.createElement("div"); div.className = "lbl3d len"; div.textContent = w.toFixed(2) + " m";
+        const l = new CSS2DObject(div); l.position.set(0, h / 2 + 0.12, 0); m.add(l);
+      }
+      roomGroup.add(m);
+    }
+  }
+  for (const f of r.floors || []) {
+    if (!f.poly || f.poly.length < 3) continue;
+    const mat = new THREE.Matrix4().fromArray(f.t);
+    const pts = f.poly.map(p => new THREE.Vector3(...p).applyMatrix4(mat));
+    const shape = new THREE.Shape(pts.map(p => new THREE.Vector2(p.x, -p.z)));
+    const g = new THREE.ShapeGeometry(shape); g.rotateX(-Math.PI / 2);
+    const fl = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0x2b3a55, side: THREE.DoubleSide }));
+    fl.position.y = pts[0].y + 0.002;
+    roomGroup.add(fl);
+  }
+  for (const o of r.objects || []) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(...o.dims), objMat);
+    m.applyMatrix4(new THREE.Matrix4().fromArray(o.t));
+    m.add(new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry), new THREE.LineBasicMaterial({ color: 0xe8c48e })));
+    const div = document.createElement("div"); div.className = "lbl3d"; div.dataset.cat = o.cat; div.textContent = t("cat_" + o.cat);
+    const l = new CSS2DObject(div); l.position.set(0, o.dims[1] / 2 + 0.08, 0); m.add(l);
+    roomGroup.add(m);
+  }
+  if (!fitted) fit();
+}
+
+// ---------------------------------------------------------------- LiDAR mesh anchors
+const hex = (u8) => Array.from(u8, b => b.toString(16).padStart(2, "0")).join("");
+function onBinary(buf) {
+  const u8 = new Uint8Array(buf);
+  const id = hex(u8.subarray(1, 17));
+  if (u8[0] === 3) { const m = anchors.get(id); if (m) { meshGroup.remove(m); m.geometry.dispose(); anchors.delete(id); } return; }
+  if (u8[0] !== 1) return;
+  const dv = new DataView(buf);
+  const mat = new Float32Array(buf.slice(17, 17 + 64));
+  const vc = dv.getUint32(81, true), fc = dv.getUint32(85, true);
+  const verts = new Float32Array(buf.slice(89, 89 + vc * 12));
+  const faces = new Uint32Array(buf.slice(89 + vc * 12, 89 + vc * 12 + fc * 12));
+  let m = anchors.get(id);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(verts, 3));
+  g.setIndex(new THREE.BufferAttribute(faces, 1));
+  g.computeVertexNormals();
+  if (!m) { m = new THREE.Mesh(g, meshMat); m.matrixAutoUpdate = false; anchors.set(id, m); meshGroup.add(m); }
+  else { m.geometry.dispose(); m.geometry = g; }
+  m.matrix.fromArray(mat);
+  if (!fitted && anchors.size > 3) fit();
+}
+
+// ---------------------------------------------------------------- view helpers
+let fitted = false;
+function fit() {
+  const box = new THREE.Box3();
+  if (roomGroup.children.length) box.expandByObject(roomGroup);
+  if (meshGroup.children.length) box.expandByObject(meshGroup);
+  if (box.isEmpty()) return;
+  fitted = true;
+  const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+  const r = Math.max(s.x, s.z, 2);
+  controls.target.copy(c); persp.position.set(c.x + r * 0.9, c.y + r * 0.9, c.z + r * 1.1);
+  ocontrols.target.set(c.x, 0, c.z); ortho.position.set(c.x, 30, c.z); ortho.lookAt(c.x, 0, c.z);
+  ortho.userData.span = Math.max(s.x, s.z) * 1.25 + 0.5; ortho.zoom = 1; resize();
+  grid.position.y = box.min.y;
+}
+function setView(v) {
+  camera = v === "plan" ? ortho : persp;
+  controls.enabled = v !== "plan"; ocontrols.enabled = v === "plan";
+  document.querySelectorAll("#viewSeg button").forEach(b => b.classList.toggle("sel", b.dataset.v === v));
+}
+$("viewSeg").onclick = e => { const v = e.target.dataset.v; if (v) setView(v); };
+$("layerSeg").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  b.classList.toggle("sel");
+  const on = b.classList.contains("sel");
+  if (b.dataset.v === "room") roomGroup.visible = on;
+  if (b.dataset.v === "mesh") meshGroup.visible = on;
+  if (b.dataset.v === "wire") meshMat.wireframe = on;
+};
+$("fitBtn").onclick = fit;
+
+// ---------------------------------------------------------------- UI / state
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+  document.querySelectorAll("[data-i]").forEach(e => e.textContent = t(e.dataset.i));
+  document.querySelectorAll("[data-it]").forEach(e => e.title = t(e.dataset.it));
+  document.querySelectorAll(".lbl3d[data-cat]").forEach(e => e.textContent = t("cat_" + e.dataset.cat));
+  $("lang").value = lang;
+  if (S) render(S);
+}
+const fmt = { pct: v => Math.round(v * 100) + "%", def: v => Math.round(v * 100) + "%" };
+function paintRange(el) {
+  el.style.setProperty("--p", (el.value - el.min) / (el.max - el.min) * 100 + "%");
+  el.nextElementSibling.textContent = (fmt[el.dataset.f] || fmt.def)(+el.value);
+}
+function setRange(el, v) { if (el.dataset.dragging || v == null) return; el.value = v; paintRange(el); }
+const selSeg = (seg, v) => seg.querySelectorAll("button").forEach(b => b.classList.toggle("sel", String(b.dataset.v) === String(v)));
+
+function render(s) {
+  S = s;
+  if (s.settings.lang !== lang) { lang = s.settings.lang; applyLang(); return; }
+  const sc = s.scan, g = s.gimbal, ph = sc.phone || {};
+  $("phoneDot").className = "dot " + (sc.connected ? "ok" : "warn");
+  $("phoneTxt").textContent = sc.connected ? (sc.device || t("p_phone_connected")) : t("p_ready");
+  $("gimbalDot").className = $("gDot2").className = "dot " + (g.connected ? "ok" : (["error", "not_found", "lost"].includes(g.status) ? "bad" : (g.status === "idle" ? "" : "warn")));
+  $("gimbalTxt").textContent = $("gStatus").textContent = t("g_" + (g.connected ? "connected" : g.status));
+  $("gConnect").textContent = g.connected ? t("disconnect") : t("connect");
+  $("gConnect").classList.toggle("primary", !g.connected);
+  $("yawTxt").textContent = sc.yaw != null ? sc.yaw.toFixed(0) + "°" : "—";
+  $("pitchTxt").textContent = sc.pitch != null ? sc.pitch.toFixed(0) + "°" : "—";
+
+  $("qrOverlay").style.display = sc.connected ? "none" : "grid";
+  if (s.scan_qr && $("qr").dataset.src !== s.scan_qr) { $("qr").src = s.scan_qr; $("qr").dataset.src = s.scan_qr; }
+
+  selSeg($("modeSeg"), ph.mode || "room");
+  $("modeSeg").querySelectorAll("button").forEach(b => b.disabled = !!ph.scanning || !!ph.busy || !sc.connected);
+  $("scanBtn").classList.toggle("on", !!ph.scanning);
+  $("scanBtn").disabled = !sc.connected || !!ph.busy;
+  $("scanBtnTxt").textContent = ph.scanning ? t("scan_finish") : t("scan_start");
+  $("scanInfo").textContent = ph.busy ? t("scan_processing") : (sc.track === "limited" && ph.scanning ? t("track_limited") : "");
+  const ins = sc.instruction && ph.scanning ? t("in_" + sc.instruction) : "";
+  $("instr").textContent = ins; $("instr").style.display = ins ? "block" : "none";
+
+  if (sc.pose && ph.scanning) {
+    const m = new THREE.Matrix4().fromArray(sc.pose);
+    phone.matrix.copy(m); phone.matrixAutoUpdate = false; phone.visible = true;
+    const p = new THREE.Vector3().setFromMatrixPosition(m);
+    if (!trailPts.length || trailPts[trailPts.length - 1].distanceTo(p) > 0.03) {
+      trailPts.push(p); if (trailPts.length > 2000) trailPts.shift();
+      trail.geometry.setFromPoints(trailPts);
+    }
+  }
+
+  const st = sc.stats || {};
+  $("stArea").textContent = st.area != null ? st.area.toFixed(1) + " m²" : "—";
+  $("stSize").textContent = st.size ? `${st.size[0].toFixed(1)}×${st.size[1].toFixed(1)}${st.height ? "×" + st.height.toFixed(1) : ""} m` : "—";
+  $("stWalls").textContent = st.walls ?? 0;
+  $("stDoorsWin").textContent = `${st.doors ?? 0} · ${st.windows ?? 0}`;
+  $("stObjects").textContent = st.objects ?? 0;
+  $("stTris").textContent = (st.tris ?? 0).toLocaleString();
+
+  const sw = sc.sweep;
+  let swText = t("sw_idle");
+  if (sw.active) swText = sw.phase === "pan" ? t("sw_pan", { n: sw.level + 1, m: sw.levels.length, pct: sw.pct ?? 0 }) : t("sw_tilt", { level: sw.target ?? 0 });
+  else if (sw.status && sw.status !== "idle" && sw.status !== "running") swText = t("sw_" + sw.status);
+  $("swStatus").textContent = swText;
+  const total = sw.levels.length;
+  $("swBar").style.width = (sw.active ? ((sw.level + (sw.phase === "pan" ? sw.progress : 0)) / total * 100) : (sw.status === "done" ? 100 : 0)) + "%";
+  $("swStart").disabled = sw.active || !sc.connected;
+  setRange($("swSpeed"), sw.speed);
+  document.querySelectorAll("input[type=range][data-k]").forEach(el => setRange(el, s.settings[el.dataset.k]));
+
+  const ex = sc.export || {};
+  $("expInfo").textContent = ex.files && ex.files.length ? t("export_saved", { n: ex.files.length }) + " · " + ex.dir : "";
+  $("expFiles").innerHTML = (ex.files || []).map(f => `<li>${f.split(/[\\/]/).pop()}</li>`).join("");
+}
+
+// ---------------------------------------------------------------- connection
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws?view=scan`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => $("disc").style.display = "none";
+  ws.onclose = () => { $("disc").style.display = "grid"; setTimeout(connect, 1000); };
+  ws.onmessage = e => {
+    if (typeof e.data !== "string") { onBinary(e.data); return; }
+    const m = JSON.parse(e.data);
+    if (m.type === "room") buildRoom(m);
+    else if (m.type === "scan_reset") { clearGroup(roomGroup); for (const a of anchors.values()) { meshGroup.remove(a); a.geometry.dispose(); } anchors.clear(); trailPts.length = 0; trail.geometry.setFromPoints([]); fitted = false; }
+    else render(m);
+  };
+}
+const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+// ---------------------------------------------------------------- controls
+$("lang").onchange = e => { const v = e.target.value; send({ cmd: "set", key: "lang", value: v }); if (S) S.settings.lang = v; lang = v; applyLang(); };
+$("stopBtn").onclick = () => send({ cmd: "stop" });
+$("quitBtn").onclick = () => { send({ cmd: "quit" }); setTimeout(() => window.close(), 300); };
+$("modeSeg").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "scan_mode", value: v }); };
+$("scanBtn").onclick = () => {
+  const ph = S && S.scan.phone || {};
+  send(ph.scanning ? { cmd: "scan_stop" } : { cmd: "scan_start", mode: ph.mode || "room" });
+};
+$("clearBtn").onclick = () => send({ cmd: "scan_clear" });
+$("swStart").onclick = () => send({ cmd: "sweep_start", speed: +$("swSpeed").value });
+$("swStop").onclick = () => send({ cmd: "sweep_stop" });
+const sp = $("swSpeed");
+sp.addEventListener("pointerdown", () => sp.dataset.dragging = "1");
+sp.addEventListener("pointerup", () => delete sp.dataset.dragging);
+sp.addEventListener("input", () => { paintRange(sp); send({ cmd: "sweep_speed", value: +sp.value }); });
+$("expBtn").onclick = () => send({ cmd: "scan_export" });
+$("expOpen").onclick = () => send({ cmd: "scan_open_folder" });
+$("gConnect").onclick = () => send({ cmd: S && S.gimbal.connected ? "gimbal_disconnect" : "gimbal_connect" });
+$("padStop").onclick = () => send({ cmd: "stop" });
+$("gModes").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "gimbal_mode", value: v }); };
+document.querySelectorAll("input[type=range][data-k]").forEach(el => {
+  el.addEventListener("pointerdown", () => el.dataset.dragging = "1");
+  el.addEventListener("pointerup", () => delete el.dataset.dragging);
+  el.addEventListener("input", () => { paintRange(el); send({ cmd: "set", key: el.dataset.k, value: +el.value }); });
+});
+document.querySelectorAll(".pad button[data-d]").forEach(b => {
+  const d = b.dataset.d;
+  b.addEventListener("pointerdown", e => { b.setPointerCapture(e.pointerId); b.classList.add("held"); send({ cmd: "manual", dir: d, on: true }); });
+  const up = () => { b.classList.remove("held"); send({ cmd: "manual", dir: d, on: false }); };
+  b.addEventListener("pointerup", up); b.addEventListener("pointercancel", up);
+});
+const keyDir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+const held = new Set();
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT") return;
+  if (keyDir[e.key]) { e.preventDefault(); if (!held.has(e.key)) { held.add(e.key); send({ cmd: "manual", dir: keyDir[e.key], on: true }); } }
+  else if (e.key === "Escape") send({ cmd: "stop" });
+  else if (e.key === "a" || e.key === "A") { if (S && S.scan.sweep.active) send({ cmd: "sweep_stop" }); else send({ cmd: "sweep_start", speed: +sp.value }); }
+  else if (e.key === "v" || e.key === "V") setView(camera === persp ? "plan" : "3d");
+});
+window.addEventListener("keyup", e => { if (keyDir[e.key]) { held.delete(e.key); send({ cmd: "manual", dir: keyDir[e.key], on: false }); } });
+window.addEventListener("blur", () => { for (const k of held) send({ cmd: "manual", dir: keyDir[k], on: false }); held.clear(); });
+
+applyLang();
+resize();
+connect();
+</script>
+</body>
+</html>
