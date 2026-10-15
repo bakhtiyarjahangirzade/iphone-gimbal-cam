@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>GimbalCam</title>
+<style>
+:root{--acc:#3b82f6;--rec:#ef4444;--ok:#22c55e;--warn:#f59e0b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#000;color:#fff;font:15px/1.4 -apple-system,system-ui,sans-serif;overflow:hidden}
+video{position:fixed;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+.top{position:fixed;top:max(10px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));display:flex;gap:10px;align-items:center;flex-wrap:wrap;text-shadow:0 1px 3px #000}
+.pill{background:rgba(0,0,0,.55);border-radius:999px;padding:5px 11px;font-weight:600;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--warn)}
+.dot.on{background:var(--ok)}
+.rec .dot{background:var(--rec);animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+.side{position:fixed;right:max(14px,env(safe-area-inset-right));top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:12px;align-items:center}
+.recbtn{width:70px;height:70px;border-radius:50%;border:4px solid #fff;background:transparent;display:grid;place-items:center;padding:0}
+.recbtn i{display:block;width:52px;height:52px;border-radius:50%;background:var(--rec);transition:all .2s}
+.recbtn.on i{width:28px;height:28px;border-radius:6px}
+.zooms{display:flex;flex-direction:column;gap:8px}
+.zooms button{width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.55);color:#fff;font-weight:700;font-size:13px}
+.zooms button.sel{background:#fff;color:#000}
+#start{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#0b0d10;padding:24px;text-align:center}
+#start h1{margin:0;font-size:24px}
+#start p{margin:0;color:#aab;max-width:420px}
+#start button{font:inherit;font-weight:700;font-size:18px;background:var(--acc);color:#fff;border:0;border-radius:14px;padding:16px 34px}
+#msg{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);background:rgba(0,0,0,.65);border-radius:10px;padding:7px 12px;font-size:13px;max-width:90%;text-align:center;display:none}
+select{font:inherit;font-size:13px;background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:999px;padding:5px 10px}
+</style>
+</head>
+<body>
+<video id="v" playsinline muted autoplay></video>
+
+<div class="top">
+  <span class="pill" id="conn"><span class="dot"></span><span id="connText">Bilgisayar bekleniyor</span></span>
+  <span class="pill" id="recPill" style="display:none"><span class="dot"></span><span id="recText">KAYIT 00:00</span></span>
+  <select id="quality" aria-label="Kayıt kalitesi">
+    <option value="4k30">Kayıt 4K30</option>
+    <option value="1080p30">Kayıt 1080p30</option>
+    <option value="720p60">Kayıt 720p60</option>
+  </select>
+  <span class="pill" id="upPill" style="display:none"></span>
+</div>
+
+<div class="side">
+  <div class="zooms" id="zooms"></div>
+  <button class="recbtn" id="recBtn" aria-label="Kayıt"><i></i></button>
+</div>
+
+<div id="msg"></div>
+
+<div id="start">
+  <h1>GimbalCam</h1>
+  <p>Telefonu yatay tut ve gimbale tak. Başlatınca kamera görüntüsü bilgisayara gider; kayıt telefonda yüksek kalitede yapılıp bilgisayara aktarılır.</p>
+  <button id="startBtn">Kamerayı başlat</button>
+  <p style="font-size:13px">Bu sayfa açık ve ekran açık kalmalı.</p>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const token = new URLSearchParams(location.search).get("t") || "";
+const video = $("v");
+
+const QUALITY = {
+  "4k30":    { width: 3840, height: 2160, frameRate: 30, bitrate: 50_000_000 },
+  "1080p30": { width: 1920, height: 1080, frameRate: 30, bitrate: 20_000_000 },
+  "720p60":  { width: 1280, height: 720,  frameRate: 60, bitrate: 12_000_000 },
+};
+const PREVIEW_FPS = 30;
+const PREVIEW_BITRATE = 4_000_000;
+
+let ws = null, stream = null, track = null, quality = "4k30";
+let encoder = null, canvas = null, ctx = null, encW = 0, encH = 0;
+let needKey = true, frameNo = 0, lastEnc = 0, spsPps = null;
+let recorder = null, recQueue = [], recSending = false, recStopped = false, recName = "", recSent = 0, recStart = 0, recTimer = null;
+let wakeLock = null;
+
+function toast(s, ms = 3000) {
+  const m = $("msg"); m.textContent = s; m.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => m.style.display = "none", ms);
+}
+
+// ---------------- WebSocket ----------------
+function connectWS() {
+  ws = new WebSocket(`wss://${location.host}/ws?t=${encodeURIComponent(token)}`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { setConn(true); sendHello(); needKey = true; if (recQueue.length || recStopped) pumpRec(); };
+  ws.onclose = () => { setConn(false); setTimeout(connectWS, 1500); };
+  ws.onerror = () => {};
+  ws.onmessage = e => { if (typeof e.data === "string") { try { handleCmd(JSON.parse(e.data)); } catch {} } };
+}
+function wsOpen() { return ws && ws.readyState === 1; }
+function sendJSON(o) { if (wsOpen()) ws.send(JSON.stringify(o)); }
+function setConn(on) {
+  $("conn").querySelector(".dot").classList.toggle("on", on);
+  $("connText").textContent = on ? "Bilgisayar bağlı" : "Bilgisayar bekleniyor";
+}
+function sendHello() {
+  const s = track ? track.getSettings() : {};
+  const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+  sendJSON({ type: "hello", width: s.width, height: s.height, fps: s.frameRate, quality,
+             zoom: caps.zoom ? [caps.zoom.min, caps.zoom.max] : null, recording: !!recorder,
+             ua: navigator.userAgent });
+}
+
+function handleCmd(c) {
+  switch (c.cmd) {
+    case "record": (c.value ?? !recorder) ? startRec() : stopRec(); break;
+    case "zoom": setZoom(+c.value); break;
+    case "keyframe": needKey = true; break;
+    case "quality": if (QUALITY[c.value]) changeQuality(c.value); break;
+    case "status": sendHello(); break;
+  }
+}
+
+// ---------------- Camera ----------------
+async function openCamera() {
+  const q = QUALITY[quality];
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: "environment" }, width: { ideal: q.width }, height: { ideal: q.height }, frameRate: { ideal: q.frameRate } },
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+  });
+  track = stream.getVideoTracks()[0];
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  buildZoomButtons();
+  sendHello();
+}
+
+async function changeQuality(q) {
+  if (recorder) { toast("Kayıt sırasında kalite değiştirilemez"); $("quality").value = quality; return; }
+  quality = q; $("quality").value = q;
+  try { await openCamera(); toast("Kalite: " + q); } catch (e) { toast("Kamera hatası: " + e.message); }
+}
+
+function buildZoomButtons() {
+  const z = $("zooms"); z.innerHTML = "";
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (!caps.zoom) return;
+  for (const v of [0.5, 1, 2, 5].filter(v => v >= caps.zoom.min && v <= caps.zoom.max)) {
+    const b = document.createElement("button");
+    b.textContent = (v < 1 ? ".5" : v) + "×"; b.dataset.z = v;
+    b.onclick = () => { setZoom(v); sendJSON({ type: "zoom", value: v }); };
+    z.appendChild(b);
+  }
+  markZoom(track.getSettings().zoom || 1);
+}
+function markZoom(v) { document.querySelectorAll("#zooms button").forEach(b => b.classList.toggle("sel", Math.abs(+b.dataset.z - v) < 0.01)); }
+async function setZoom(v) {
+  if (!track) return;
+  try { await track.applyConstraints({ advanced: [{ zoom: v }] }); markZoom(v); } catch (e) { toast("Zoom desteklenmiyor"); }
+}
+
+// ---------------- Live preview encoder (720p H.264 → PC) ----------------
+function parseAvcC(desc) {
+  const b = new Uint8Array(desc instanceof ArrayBuffer ? desc : desc.buffer, desc.byteOffset || 0, desc.byteLength);
+  const out = []; let p = 5; const nSps = b[p++] & 0x1f;
+  for (let i = 0; i < nSps; i++) { const l = (b[p] << 8) | b[p + 1]; p += 2; out.push(b.slice(p, p + l)); p += l; }
+  const nPps = b[p++];
+  for (let i = 0; i < nPps; i++) { const l = (b[p] << 8) | b[p + 1]; p += 2; out.push(b.slice(p, p + l)); p += l; }
+  return out;
+}
+const SC = new Uint8Array([0, 0, 0, 1]);
+function toAnnexB(data, isKey) {
+  if (data[0] === 0 && data[1] === 0 && (data[2] === 1 || (data[2] === 0 && data[3] === 1))) return data;
+  const parts = [];
+  if (isKey && spsPps) for (const n of spsPps) parts.push(SC, n);
+  for (let p = 0; p + 4 <= data.length;) {
+    const l = (data[p] << 24 | data[p + 1] << 16 | data[p + 2] << 8 | data[p + 3]) >>> 0; p += 4;
+    if (p + l > data.length) break;
+    parts.push(SC, data.subarray(p, p + l)); p += l;
+  }
+  const total = parts.reduce((a, x) => a + x.length, 0);
+  const out = new Uint8Array(total); let o = 0;
+  for (const x of parts) { out.set(x, o); o += x.length; }
+  return out;
+}
+
+function onChunk(chunk, meta) {
+  if (meta && meta.decoderConfig && meta.decoderConfig.description) spsPps = parseAvcC(meta.decoderConfig.description);
+  const raw = new Uint8Array(chunk.byteLength); chunk.copyTo(raw);
+  const isKey = chunk.type === "key";
+  const data = encVp8 ? raw : toAnnexB(raw, isKey);
+  if (!wsOpen()) return;
+  if (ws.bufferedAmount > 3_000_000) { needKey = true; return; } // congested: drop
+  const msg = new Uint8Array(10 + data.length);
+  msg[0] = 1; msg[1] = (isKey ? 1 : 0) | (encVp8 ? 2 : 0);
+  new DataView(msg.buffer).setBigInt64(2, BigInt(Math.round(chunk.timestamp)));
+  msg.set(data, 10);
+  ws.send(msg);
+}
+
+let encAttempt = 0;
+function encoderConfigs(w, h) {
+  const base = { width: w, height: h, bitrate: PREVIEW_BITRATE, framerate: PREVIEW_FPS, latencyMode: "realtime" };
+  return [
+    { ...base, codec: "avc1.640028", hardwareAcceleration: "prefer-hardware", avc: { format: "annexb" } },
+    { ...base, codec: "avc1.640028", avc: { format: "annexb" } },
+    { ...base, codec: "avc1.42001f", avc: { format: "annexb" } },
+    { ...base, codec: "avc1.42001f" },
+    { ...base, codec: "vp8" },
+  ];
+}
+function setupEncoder(w, h) {
+  if (encoder && encoder.state !== "closed") try { encoder.close(); } catch {}
+  if (w !== encW || h !== encH) encAttempt = 0;
+  encW = w; encH = h; spsPps = null;
+  canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+  ctx = canvas.getContext("2d", { alpha: false });
+  const configs = encoderConfigs(w, h);
+  const enc = new VideoEncoder({
+    output: (c, m) => { encOk = true; onChunk(c, m); },
+    error: e => {
+      if (encoder !== enc) return;
+      if (!encOk && encAttempt < configs.length - 1) { encAttempt++; setupEncoder(encW, encH); return; }
+      toast("Kodlayıcı hatası: " + e.message);
+      setTimeout(() => { encoder = null; }, 1000);
+    },
+  });
+  encoder = enc; encOk = false;
+  encVp8 = configs[encAttempt].codec === "vp8";
+  try { enc.configure(configs[encAttempt]); }
+  catch { if (encAttempt < configs.length - 1) { encAttempt++; return setupEncoder(w, h); } }
+  needKey = true;
+}
+let encOk = false, encVp8 = false;
+
+function onVideoFrame(now) {
+  video.requestVideoFrameCallback(onVideoFrame);
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return;
+  const landscape = vw >= vh;
+  const w = landscape ? 1280 : 720, h = landscape ? 720 : 1280;
+  if (w !== encW || h !== encH || !encoder || encoder.state === "closed") setupEncoder(w, h);
+  if (!wsOpen()) return;
+  if (now - lastEnc < 1000 / PREVIEW_FPS - 4) return;
+  if (encoder.encodeQueueSize > 2) { needKey = true; return; }
+  lastEnc = now;
+  ctx.drawImage(video, 0, 0, w, h);
+  const vf = new VideoFrame(canvas, { timestamp: Math.round(now * 1000) });
+  frameNo++;
+  encoder.encode(vf, { keyFrame: needKey || frameNo % (PREVIEW_FPS * 2) === 0 });
+  needKey = false;
+  vf.close();
+}
+
+// ---------------- High-quality recording (streams to PC while recording) ----------------
+function startRec() {
+  if (recorder || !stream) return;
+  const q = QUALITY[quality];
+  const mime = ["video/mp4;codecs=avc1", "video/mp4"].find(t => MediaRecorder.isTypeSupported(t));
+  try { recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: q.bitrate, audioBitsPerSecond: 192000 }); }
+  catch (e) { toast("Kayıt başlatılamadı: " + e.message); recorder = null; return; }
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  recName = `GimbalCam_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${quality}.mp4`;
+  recSent = 0; recStopped = false; recQueue = [];
+  sendJSON({ type: "rec_begin", name: recName });
+  recorder.ondataavailable = e => { if (e.data && e.data.size) { recQueue.push(e.data); pumpRec(); } };
+  recorder.onstop = () => { recStopped = true; pumpRec(); };
+  recorder.start(1000);
+  recStart = Date.now();
+  $("recBtn").classList.add("on"); $("recPill").style.display = ""; $("recPill").classList.add("rec");
+  $("quality").disabled = true;
+  recTimer = setInterval(() => {
+    const t = Math.floor((Date.now() - recStart) / 1000);
+    $("recText").textContent = `KAYIT ${p(Math.floor(t / 60))}:${p(t % 60)}`;
+  }, 500);
+  sendJSON({ type: "recording", value: true });
+}
+
+function stopRec() {
+  if (!recorder || recorder.state === "inactive") return;
+  recorder.stop();
+  clearInterval(recTimer);
+  $("recBtn").classList.remove("on"); $("recPill").style.display = "none";
+  $("quality").disabled = false;
+  sendJSON({ type: "recording", value: false });
+}
+
+async function pumpRec() {
+  if (recSending) return;
+  recSending = true;
+  try {
+    while (recQueue.length) {
+      if (!wsOpen()) { showUpload(); return; }
+      if (ws.bufferedAmount > 1_500_000) { await sleep(20); continue; } // keep room for live preview
+      const blob = recQueue.shift();
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      const msg = new Uint8Array(buf.length + 1); msg[0] = 3; msg.set(buf, 1);
+      ws.send(msg);
+      recSent += buf.length;
+      showUpload();
+    }
+    if (recStopped && wsOpen()) {
+      while (ws.bufferedAmount > 0) await sleep(100);
+      sendJSON({ type: "rec_end", name: recName, size: recSent });
+      toast("Kayıt bilgisayara aktarıldı ✔", 4000);
+      recorder = null; recStopped = false;
+      $("upPill").style.display = "none";
+    }
+  } finally { recSending = false; }
+}
+
+function showUpload() {
+  const pending = recQueue.reduce((a, b) => a + b.size, 0);
+  const el = $("upPill");
+  if (pending > 2_000_000 || (recStopped && recQueue.length)) {
+    el.style.display = "";
+    el.textContent = wsOpen() ? `Aktarılıyor… ${(pending / 1e6).toFixed(0)} MB kaldı` : `Bağlantı yok — ${(pending / 1e6).toFixed(0)} MB bekliyor`;
+  } else if (!recStopped) el.style.display = "none";
+}
+
+// ---------------- Misc ----------------
+async function keepAwake() {
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch {}
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
+
+$("recBtn").onclick = () => recorder && !recStopped ? stopRec() : startRec();
+$("quality").onchange = e => changeQuality(e.target.value);
+
+$("startBtn").onclick = async () => {
+  if (!window.VideoEncoder) { toast("Bu tarayıcı WebCodecs desteklemiyor (iOS 16.4+ Safari gerekli)", 6000); }
+  try { await openCamera(); }
+  catch (e) { toast("Kamera açılamadı: " + e.message, 6000); return; }
+  $("start").style.display = "none";
+  keepAwake();
+  video.requestVideoFrameCallback(onVideoFrame);
+  connectWS();
+};
+window.addEventListener("beforeunload", e => { if (recorder || recQueue.length) { e.preventDefault(); e.returnValue = ""; } });
+</script>
+</body>
+</html>
