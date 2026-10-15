@@ -237,10 +237,12 @@ function onChunk(chunk, meta) {
   const isKey = chunk.type === "key";
   const data = encVp8 ? raw : toAnnexB(raw, isKey);
   if (!wsOpen()) return;
-  if (ws.bufferedAmount > 3_000_000) { needKey = true; return; } // congested: drop
+  if (ws.bufferedAmount > 250_000) { needKey = true; return; } // >~0.5 s queued: drop to keep latency low
   const msg = new Uint8Array(10 + data.length);
   msg[0] = 1; msg[1] = (isKey ? 1 : 0) | (encVp8 ? 2 : 0);
-  new DataView(msg.buffer).setBigInt64(2, BigInt(Math.round(chunk.timestamp)));
+  const capT = capTimes.get(chunk.timestamp) ?? Date.now(); capTimes.delete(chunk.timestamp);
+  if (capTimes.size > 60) capTimes.clear();
+  new DataView(msg.buffer).setBigInt64(2, BigInt(capT)); // capture wall-clock ms (latency display on PC)
   msg.set(data, 10);
   ws.send(msg);
 }
@@ -279,6 +281,7 @@ function setupEncoder(w, h) {
   needKey = true;
 }
 let encOk = false, encVp8 = false;
+const capTimes = new Map();
 
 function onVideoFrame(now) {
   video.requestVideoFrameCallback(onVideoFrame);
@@ -293,6 +296,7 @@ function onVideoFrame(now) {
   lastEnc = now;
   ctx.drawImage(video, 0, 0, w, h);
   const vf = new VideoFrame(canvas, { timestamp: Math.round(now * 1000) });
+  capTimes.set(vf.timestamp, Date.now());
   frameNo++;
   encoder.encode(vf, { keyFrame: needKey || frameNo % (PREVIEW_FPS * 2) === 0 });
   needKey = false;
