@@ -5,7 +5,7 @@ import SwiftUI
 struct GimbalScanApp: App {
     @StateObject private var link = Link()
 
-    var body: some Scene {
+    var body: some SwiftUI.Scene {
         WindowGroup {
             RootView(link: link)
                 .onOpenURL { url in link.pair(with: url.absoluteString) }
