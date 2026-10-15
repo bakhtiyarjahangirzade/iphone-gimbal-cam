@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gimbal Test</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1b1f24;--mut:#5d6672;--line:#dde1e6;--acc:#2563eb;--ok:#15803d;--err:#b91c1c;--btn:#eef1f5}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--card:#1a1e24;--fg:#e8ebef;--mut:#9aa3ad;--line:#2c323a;--acc:#60a5fa;--ok:#4ade80;--err:#f87171;--btn:#242a32}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{color:var(--mut);margin:0 0 18px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h2{font-size:15px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.04em;color:var(--mut)}
+button{font:inherit;background:var(--btn);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;user-select:none;touch-action:none}
+button:hover{border-color:var(--acc)}
+button.primary{background:var(--acc);color:#fff;border-color:var(--acc)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.held{background:var(--acc);color:#fff}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+.pad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(3,64px);gap:6px;justify-content:center;margin:6px 0 12px}
+.pad button{font-size:22px;padding:0}
+.status{font-weight:600}
+.status.on{color:var(--ok)}.status.off{color:var(--err)}
+select,input[type=text]{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+input[type=text]{font-family:ui-monospace,Consolas,monospace;flex:1;min-width:0}
+label{color:var(--mut);font-size:14px}
+#log{font:12.5px/1.5 ui-monospace,Consolas,monospace;background:var(--bg);border:1px solid var(--line);border-radius:8px;height:300px;overflow:auto;padding:8px;white-space:pre-wrap;word-break:break-all}
+.tx{color:var(--acc)}.rx{color:var(--ok)}.er{color:var(--err)}
+.hint{color:var(--mut);font-size:13px;margin:6px 0 0}
+table.ax{border-collapse:collapse;width:100%}
+table.ax td{padding:4px 0}
+kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>Gimbal Test — Crane M2S</h1>
+<p class="sub">Adım 1: bilgisayardan gimbale Bluetooth ile bağlanıp hareket ettirme testi. Chrome veya Edge ile aç.</p>
+
+<div class="grid">
+  <section class="card">
+    <h2>1 · Bağlantı</h2>
+    <div class="row">
+      <button class="primary" id="btnConnect">Gimbale bağlan</button>
+      <button id="btnConnectAll">Tüm cihazları göster</button>
+      <button id="btnDisconnect" disabled>Kes</button>
+    </div>
+    <div class="row"><span>Durum:</span> <span id="status" class="status off">Bağlı değil</span></div>
+    <div class="row">
+      <label for="proto">Protokol</label>
+      <select id="proto">
+        <option value="new">Yeni (24 3C) — Crane M2S</option>
+        <option value="old">Eski (06 10) — Crane 2 tipi</option>
+      </select>
+    </div>
+    <p class="hint">Önce telefondaki ZY Cami'yi kapat ve telefonun Bluetooth'unu geçici olarak kapat — gimbal aynı anda tek cihaza bağlanır.</p>
+  </section>
+
+  <section class="card">
+    <h2>2 · Hareket</h2>
+    <div class="pad">
+      <span></span><button data-dir="up" title="Yukarı (↑)">▲</button><span></span>
+      <button data-dir="left" title="Sol (←)">◀</button><button id="btnCenter" title="Durdur">■</button><button data-dir="right" title="Sağ (→)">▶</button>
+      <span></span><button data-dir="down" title="Aşağı (↓)">▼</button><span></span>
+    </div>
+    <div class="row">
+      <button data-dir="rollL">⟲ Roll (Q)</button><button data-dir="rollR">⟳ Roll (E)</button>
+    </div>
+    <div class="row">
+      <label for="speed">Hız</label>
+      <input id="speed" type="range" min="5" max="100" value="40"><span id="speedVal">40%</span>
+    </div>
+    <p class="hint">Butona basılı tut ya da klavyede <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> <kbd>Q</kbd><kbd>E</kbd> kullan.</p>
+  </section>
+
+  <section class="card">
+    <h2>3 · Eksen eşleştirme</h2>
+    <table class="ax">
+      <tr><td>Pan (sağ-sol)</td><td><select id="axPan"><option>01</option><option selected>02</option><option>03</option></select></td>
+        <td><label><input type="checkbox" id="invPan"> ters</label></td></tr>
+      <tr><td>Tilt (yukarı-aşağı)</td><td><select id="axTilt"><option selected>01</option><option>02</option><option>03</option></select></td>
+        <td><label><input type="checkbox" id="invTilt"> ters</label></td></tr>
+      <tr><td>Roll</td><td><select id="axRoll"><option>01</option><option>02</option><option selected>03</option></select></td>
+        <td><label><input type="checkbox" id="invRoll"> ters</label></td></tr>
+    </table>
+    <p class="hint">Yanlış eksen dönerse buradan değiştir. Tek tek denemek için:</p>
+    <div class="row">
+      <button data-raw="01:-">01 −</button><button data-raw="01:+">01 +</button>
+      <button data-raw="02:-">02 −</button><button data-raw="02:+">02 +</button>
+      <button data-raw="03:-">03 −</button><button data-raw="03:+">03 +</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4 · Sorgu ve mod (deneysel)</h2>
+    <div class="row">
+      <button data-q="02">Sorgu 02</button><button data-q="04">Sorgu 04</button><button data-q="05">Sorgu 05</button><button data-q="06">Sorgu 06</button>
+      <button data-q="22">Açı 22</button><button data-q="23">Açı 23</button><button data-q="24">Açı 24</button>
+    </div>
+    <div class="row">
+      <button data-mode="00">PF</button><button data-mode="01">L</button><button data-mode="02">F</button><button data-mode="03">POV</button><button data-mode="04">GO</button>
+    </div>
+    <div class="row">
+      <input type="text" id="raw" placeholder="Ham komut (yeni prot.): cmd + veri, ör: 04 00 00 00">
+      <button id="btnRaw">Gönder</button>
+    </div>
+    <p class="hint">Uzunluk, sıra no. ve CRC otomatik eklenir.</p>
+  </section>
+</div>
+
+<section class="card" style="margin-top:16px">
+  <h2>Kayıt</h2>
+  <div class="row">
+    <button id="btnCopy">Kaydı kopyala</button><button id="btnClear">Temizle</button>
+    <label><input type="checkbox" id="quiet" checked> Hareket paketlerini gizle</label>
+  </div>
+  <div id="log"></div>
+  <p class="hint">Bir sorun olursa “Kaydı kopyala”ya bas ve Claude'a yapıştır.</p>
+</section>
+</main>
+
+<script>
+"use strict";
+// ---------- Protokol ----------
+const SERVICE = 0xfee9;
+const WRITE_UUID = "d44bc439-abfd-45a2-b575-925416129600";
+const CENTER = 2048;
+
+function crc16xmodem(bytes){
+  let crc = 0;
+  for (const b of bytes){
+    crc ^= b << 8;
+    for (let i=0;i<8;i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+  }
+  return crc;
+}
+let seq = 0;
+function nextSeq(){ seq = (seq + 1) & 0xff; if (seq === 0) seq = 1; return seq; }
+
+// Yeni protokol: 24 3C | uzunluk(LE) | 18 12 | sıra | 01 | cmd | veri... | CRC(LE)
+function buildNew(cmd, data){
+  const payload = [0x18, 0x12, nextSeq(), 0x01, cmd, ...data];
+  const crc = crc16xmodem(payload);
+  return new Uint8Array([0x24, 0x3c, payload.length & 0xff, payload.length >> 8, ...payload, crc & 0xff, crc >> 8]);
+}
+// Eski protokol (Crane 2): 06 10 | eksen | değer(BE) | CRC(BE)
+function buildOld(axis, value){
+  const p = [0x06, 0x10, axis, value >> 8, value & 0xff];
+  const crc = crc16xmodem(p);
+  return new Uint8Array([...p, crc >> 8, crc & 0xff]);
+}
+function joystickPacket(axis, value){
+  return $("proto").value === "new"
+    ? buildNew(axis, [0x10, value & 0xff, value >> 8])
+    : buildOld(axis, value);
+}
+
+// ---------- Yardımcılar ----------
+const $ = id => document.getElementById(id);
+const hex = a => Array.from(a, b => b.toString(16).padStart(2,"0")).join(" ");
+function log(msg, cls){
+  const el = $("log");
+  const line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = new Date().toLocaleTimeString() + "  " + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---------- BLE ----------
+let device = null, writeChar = null;
+let queue = Promise.resolve();
+
+function setStatus(on, text){
+  const s = $("status");
+  s.textContent = text; s.className = "status " + (on ? "on" : "off");
+  $("btnDisconnect").disabled = !on;
+}
+
+async function connect(all){
+  if (!navigator.bluetooth){
+    log("Bu tarayıcı Web Bluetooth desteklemiyor. Chrome veya Edge kullan.", "er"); return;
+  }
+  try{
+    const opts = all
+      ? { acceptAllDevices: true, optionalServices: [SERVICE] }
+      : { filters: [{namePrefix:"CRANE"},{namePrefix:"Crane"},{namePrefix:"ZHIYUN"},{services:[SERVICE]}], optionalServices: [SERVICE] };
+    setStatus(false, "Cihaz seçiliyor…");
+    device = await navigator.bluetooth.requestDevice(opts);
+    device.addEventListener("gattserverdisconnected", () => { setStatus(false, "Bağlantı koptu"); log("Bağlantı koptu", "er"); writeChar = null; });
+    log("Seçilen cihaz: " + (device.name || "(isimsiz)"));
+    setStatus(false, "Bağlanıyor…");
+    const server = await device.gatt.connect();
+    const svc = await server.getPrimaryService(SERVICE);
+    const chars = await svc.getCharacteristics();
+    for (const c of chars){
+      const p = c.properties;
+      const props = ["read","write","writeWithoutResponse","notify","indicate"].filter(k => p[k]).join(",");
+      log("Karakteristik " + c.uuid + "  [" + props + "]");
+      if (c.uuid === WRITE_UUID) writeChar = c;
+      if (p.notify || p.indicate){
+        try{
+          await c.startNotifications();
+          c.addEventListener("characteristicvaluechanged", e => onNotify(c.uuid, new Uint8Array(e.target.value.buffer)));
+        }catch(err){ log("Bildirim açılamadı " + c.uuid + ": " + err.message, "er"); }
+      }
+    }
+    if (!writeChar) writeChar = chars.find(c => c.properties.writeWithoutResponse || c.properties.write) || null;
+    if (!writeChar){ log("Yazılabilir karakteristik bulunamadı!", "er"); setStatus(false, "Hata"); return; }
+    setStatus(true, "Bağlı: " + (device.name || "gimbal"));
+    log("Hazır. Yazma kanalı: " + writeChar.uuid, "rx");
+    sendNew(0x02, [0,0,0]); // tanışma sorgusu
+  }catch(err){
+    setStatus(false, "Bağlı değil");
+    log("Hata: " + err.message, "er");
+  }
+}
+
+function send(bytes, quietable){
+  if (!writeChar){ log("Önce bağlan.", "er"); return; }
+  if (!(quietable && $("quiet").checked)) log("→ " + hex(bytes), "tx");
+  queue = queue.then(() => writeChar.properties.writeWithoutResponse
+      ? writeChar.writeValueWithoutResponse(bytes)
+      : writeChar.writeValueWithResponse(bytes))
+    .catch(err => log("Gönderim hatası: " + err.message, "er"));
+}
+function sendNew(cmd, data){
+  if ($("proto").value !== "new"){ log("Bu işlem sadece yeni protokolde var.", "er"); return; }
+  send(buildNew(cmd, data));
+}
+
+function onNotify(uuid, v){
+  let extra = "";
+  if (v[0] === 0x24 && v[1] === 0x3e && v.length >= 9){
+    const fmt = hex(v.slice(4,6)), cmd = v[8].toString(16).padStart(2,"0");
+    const data = v.slice(9, v.length - 2);
+    extra = `  (format ${fmt}, cmd ${cmd}, veri ${hex(data)})`;
+    if (fmt === "18 15" && $("quiet").checked) return; // kalp atışı
+  }
+  log("← " + hex(v) + extra, "rx");
+}
+
+// ---------- Hareket ----------
+const held = new Map(); // key -> {axis, sign}
+let loop = null;
+
+function axisFor(dir){
+  const a = n => parseInt($(n).value, 16);
+  const inv = n => $(n).checked ? -1 : 1;
+  switch (dir){
+    case "up":    return { axis: a("axTilt"), sign:  1 * inv("invTilt") };
+    case "down":  return { axis: a("axTilt"), sign: -1 * inv("invTilt") };
+    case "left":  return { axis: a("axPan"),  sign: -1 * inv("invPan") };
+    case "right": return { axis: a("axPan"),  sign:  1 * inv("invPan") };
+    case "rollL": return { axis: a("axRoll"), sign: -1 * inv("invRoll") };
+    case "rollR": return { axis: a("axRoll"), sign:  1 * inv("invRoll") };
+  }
+}
+function valueFor(sign){
+  const s = parseInt($("speed").value, 10) / 100;
+  return Math.max(0, Math.min(4095, Math.round(CENTER + sign * 2047 * s)));
+}
+function tick(){
+  for (const {axis, sign} of held.values()) send(joystickPacket(axis, valueFor(sign)), true);
+}
+function press(key, spec, el){
+  if (held.has(key)) return;
+  held.set(key, spec);
+  if (el) el.classList.add("held");
+  tick();
+  if (!loop) loop = setInterval(tick, 100);
+}
+function release(key, el){
+  const spec = held.get(key);
+  if (!spec) return;
+  held.delete(key);
+  if (el) el.classList.remove("held");
+  for (let i=0;i<3;i++) send(joystickPacket(spec.axis, CENTER), true);
+  if (held.size === 0){ clearInterval(loop); loop = null; }
+}
+function stopAll(){
+  for (const k of [...held.keys()]) release(k, document.querySelector(`[data-dir="${k}"]`));
+  for (const ax of [1,2,3]) send(joystickPacket(ax, CENTER), true);
+  document.querySelectorAll(".held").forEach(e => e.classList.remove("held"));
+}
+
+function bindHold(el, key, specFn){
+  el.addEventListener("pointerdown", e => { e.preventDefault(); el.setPointerCapture(e.pointerId); press(key, specFn(), el); });
+  const up = () => release(key, el);
+  el.addEventListener("pointerup", up);
+  el.addEventListener("pointercancel", up);
+}
+document.querySelectorAll("[data-dir]").forEach(el => bindHold(el, el.dataset.dir, () => axisFor(el.dataset.dir)));
+document.querySelectorAll("[data-raw]").forEach(el => {
+  const [ax, s] = el.dataset.raw.split(":");
+  bindHold(el, "raw" + el.dataset.raw, () => ({ axis: parseInt(ax,16), sign: s === "+" ? 1 : -1 }));
+});
+
+const keyMap = { ArrowUp:"up", ArrowDown:"down", ArrowLeft:"left", ArrowRight:"right", q:"rollL", e:"rollR", Q:"rollL", E:"rollR" };
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" && e.target.type === "text") return;
+  const d = keyMap[e.key]; if (!d) { if (e.key === " ") { e.preventDefault(); stopAll(); } return; }
+  e.preventDefault(); press(d, axisFor(d), document.querySelector(`[data-dir="${d}"]`));
+});
+window.addEventListener("keyup", e => {
+  const d = keyMap[e.key]; if (!d) return;
+  release(d, document.querySelector(`[data-dir="${d}"]`));
+});
+window.addEventListener("blur", stopAll);
+
+// ---------- Diğer butonlar ----------
+$("btnConnect").onclick = () => connect(false);
+$("btnConnectAll").onclick = () => connect(true);
+$("btnDisconnect").onclick = () => { stopAll(); device?.gatt?.disconnect(); };
+$("btnCenter").onclick = stopAll;
+$("speed").oninput = () => $("speedVal").textContent = $("speed").value + "%";
+document.querySelectorAll("[data-q]").forEach(el => el.onclick = () => sendNew(parseInt(el.dataset.q,16), [0,0,0]));
+document.querySelectorAll("[data-mode]").forEach(el => el.onclick = () => sendNew(0x27, [0x80, parseInt(el.dataset.mode,16), 0]));
+$("btnRaw").onclick = () => {
+  const bytes = $("raw").value.trim().split(/[\s,]+/).filter(Boolean).map(x => parseInt(x,16));
+  if (!bytes.length || bytes.some(isNaN)){ log("Geçersiz hex.", "er"); return; }
+  sendNew(bytes[0], bytes.slice(1));
+};
+$("btnCopy").onclick = async () => {
+  const text = Array.from($("log").children, d => d.textContent).join("\n");
+  try { await navigator.clipboard.writeText(text); log("Kayıt panoya kopyalandı."); }
+  catch { log("Kopyalanamadı — metni elle seç.", "er"); }
+};
+$("btnClear").onclick = () => $("log").innerHTML = "";
+
+log("Hazır. “Gimbale bağlan”a bas.");
+if (!navigator.bluetooth) log("Uyarı: Web Bluetooth yok. Chrome veya Edge ile aç.", "er");
+</script>
+</body>
+</html>
