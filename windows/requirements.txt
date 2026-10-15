@@ -1,0 +1,9 @@
+aiohttp==3.10.10
+av==13.1.0
+bleak==0.22.3
+cryptography==43.0.3
+mediapipe==0.10.14
+numpy<2
+pillow==11.0.0
+pyvirtualcam==0.12.1
+qrcode==8.0
