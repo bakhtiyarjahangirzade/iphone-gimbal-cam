@@ -74,7 +74,7 @@ const QUALITY = {
 const PREVIEW_FPS = 30;
 const PREVIEW_BITRATE = 4_000_000;
 
-let ws = null, stream = null, track = null, quality = "4k30";
+let ws, stream = null, track = null, quality = "4k30";
 let encoder = null, canvas = null, ctx = null, encW = 0, encH = 0;
 let needKey = true, frameNo = 0, lastEnc = 0, spsPps = null;
 let recorder = null, recQueue = [], recSending = false, recStopped = false, recName = "", recSent = 0, recStart = 0, recTimer = null;
@@ -86,16 +86,65 @@ function toast(s, ms = 3000) {
 }
 
 // ---------------- WebSocket ----------------
-function connectWS() {
-  ws = new WebSocket(`wss://${location.host}/ws?t=${encodeURIComponent(token)}`);
-  ws.binaryType = "arraybuffer";
-  ws.onopen = () => { setConn(true); sendHello(); needKey = true; if (recQueue.length || recStopped) pumpRec(); };
-  ws.onclose = () => { setConn(false); setTimeout(connectWS, 1500); };
-  ws.onerror = () => {};
-  ws.onmessage = e => { if (typeof e.data === "string") { try { handleCmd(JSON.parse(e.data)); } catch {} } };
+// Transport: plain HTTPS (iOS Safari ignores the certificate exception for WebSockets).
+// ws.send(...) queues a message; upLoop POSTs batches; pollLoop long-polls commands.
+const sid = Math.random().toString(36).slice(2) + Date.now().toString(36);
+const qs = `t=${encodeURIComponent(token)}&sid=${sid}`;
+const enc = new TextEncoder();
+ws = {
+  readyState: 0, bufferedAmount: 0, q: [],
+  send(m) {
+    let b;
+    if (typeof m === "string") { const t = enc.encode(m); b = new Uint8Array(t.length + 1); b[0] = 2; b.set(t, 1); }
+    else b = m;
+    this.q.push(b); this.bufferedAmount += b.length + 4;
+  },
+};
+function connectWS() { upLoop(); pollLoop(); }
+function onLinkUp() { setConn(true); sendHello(); needKey = true; if (recQueue.length || recStopped) pumpRec(); }
+
+async function upLoop() {
+  let lastPing = 0;
+  for (;;) {
+    if (!ws.q.length) {
+      const now = Date.now();
+      if (now - lastPing > (ws.readyState === 1 ? 2000 : 1000)) { lastPing = now; ws.send(JSON.stringify({ type: "ping" })); }
+      else { await sleep(4); continue; }
+    }
+    const batch = ws.q; ws.q = [];
+    const total = batch.reduce((a, b) => a + b.length + 4, 0);
+    const body = new Uint8Array(total); const dv = new DataView(body.buffer);
+    let o = 0;
+    for (const b of batch) { dv.setUint32(o, b.length); o += 4; body.set(b, o); o += b.length; }
+    try {
+      const r = await fetch(`/up?${qs}`, { method: "POST", body, cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      ws.bufferedAmount = Math.max(0, ws.bufferedAmount - total);
+      lastPing = Date.now();
+      if (ws.readyState !== 1) { ws.readyState = 1; onLinkUp(); }
+    } catch (e) {
+      // keep JSON + recording chunks, drop stale video
+      ws.q = batch.filter(b => b[0] !== 1).concat(ws.q);
+      ws.bufferedAmount = ws.q.reduce((a, b) => a + b.length + 4, 0);
+      if (ws.readyState === 1) { ws.readyState = 0; setConn(false); }
+      needKey = true;
+      await sleep(800);
+    }
+  }
 }
-function wsOpen() { return ws && ws.readyState === 1; }
-function sendJSON(o) { if (wsOpen()) ws.send(JSON.stringify(o)); }
+
+async function pollLoop() {
+  for (;;) {
+    try {
+      const r = await fetch(`/poll?${qs}`, { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      for (const c of await r.json()) handleCmd(c);
+    } catch { await sleep(1000); }
+  }
+}
+
+function wsOpen() { return ws.readyState === 1; }
+function sendJSON(o) { ws.send(JSON.stringify(o)); }
 function setConn(on) {
   $("conn").querySelector(".dot").classList.toggle("on", on);
   $("connText").textContent = on ? "Bilgisayar bağlı" : "Bilgisayar bekleniyor";
