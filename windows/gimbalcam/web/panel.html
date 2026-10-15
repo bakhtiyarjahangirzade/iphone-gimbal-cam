@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GimbalCam</title>
+<style>
+:root{
+  --bg:#0d0f13; --panel:#151920; --panel2:#1b2029; --line:#262c37; --line2:#313846;
+  --fg:#e9edf3; --mut:#8b95a5; --mut2:#5f6878;
+  --acc:#4f8cff; --acc2:#3a6fd8; --ok:#34d399; --warn:#fbbf24; --rec:#f43f5e; --stop:#ef4444;
+  --r:14px; --r2:10px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.45 "Segoe UI Variable","Segoe UI",system-ui,sans-serif;overflow:hidden;user-select:none}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+.app{display:grid;grid-template-rows:56px 1fr 30px;height:100vh}
+
+/* ---------- top bar ---------- */
+.top{display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--line);background:#0f1217}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:.2px;margin-inline-end:8px}
+.brand .logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#4f8cff,#7c5cff);display:grid;place-items:center}
+.pill{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:999px;background:var(--panel);border:1px solid var(--line);color:var(--mut);font-size:12.5px;white-space:nowrap}
+.pill b{color:var(--fg);font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mut2)}
+.dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(52,211,153,.15)}
+.dot.warn{background:var(--warn)}
+.dot.bad{background:var(--stop)}
+.spacer{flex:1}
+.lang{height:32px;border-radius:9px;background:var(--panel);border:1px solid var(--line);padding:0 8px}
+.btn{height:34px;padding:0 14px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);font-weight:600;display:inline-flex;align-items:center;gap:7px;transition:background .15s,border-color .15s}
+.btn:hover{border-color:#46506a;background:#222836}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.primary:hover{background:var(--acc2)}
+.btn.ghost{background:transparent}
+.btn.on{background:rgba(251,191,36,.14);border-color:rgba(251,191,36,.5);color:var(--warn)}
+.stopbtn{height:38px;padding:0 18px;border-radius:11px;border:0;background:var(--stop);color:#fff;font-weight:800;letter-spacing:.6px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 18px rgba(239,68,68,.25)}
+.stopbtn:hover{filter:brightness(1.08)}
+.stopbtn:active{transform:translateY(1px)}
+.iconbtn{width:34px;height:34px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);display:grid;place-items:center}
+
+/* ---------- main ---------- */
+.main{display:grid;grid-template-columns:1fr 372px;min-height:0}
+.stagewrap{display:flex;flex-direction:column;min-width:0;min-height:0;padding:16px;gap:12px}
+.stage{position:relative;flex:1;min-height:0;border-radius:var(--r);background:#000;border:1px solid var(--line);overflow:hidden;display:grid;place-items:center}
+.stage img{max-width:100%;max-height:100%;display:block}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at center,#141a24 0%,#07090c 75%)}
+.qrcard{display:flex;gap:28px;align-items:center;background:rgba(21,25,32,.9);border:1px solid var(--line);border-radius:18px;padding:26px 30px;max-width:min(760px,92%)}
+.qrcard img{width:220px;height:220px;border-radius:12px;background:#fff;padding:8px}
+.qrcard h2{margin:0 0 12px;font-size:21px}
+.steps{margin:0;padding:0;list-style:none;display:grid;gap:10px;color:var(--mut)}
+.steps li{display:flex;gap:10px;align-items:flex-start}
+.steps .n{flex:none;width:22px;height:22px;border-radius:50%;background:var(--panel2);border:1px solid var(--line2);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--fg)}
+.small{font-size:12px;color:var(--mut2)}
+.badge{position:absolute;top:14px;inset-inline-start:14px;display:flex;gap:8px}
+.recbadge{display:none;align-items:center;gap:8px;background:rgba(244,63,94,.92);color:#fff;font-weight:700;border-radius:8px;padding:5px 10px;font-variant-numeric:tabular-nums}
+.recbadge i{width:8px;height:8px;border-radius:50%;background:#fff;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.3}}
+.pausedov{position:absolute;inset:0;display:none;place-items:center;background:rgba(7,9,12,.66);backdrop-filter:blur(2px)}
+.pausedov div{font-size:22px;font-weight:700;display:flex;gap:10px;align-items:center}
+
+.recbar{display:flex;align-items:center;gap:12px;flex-wrap:nowrap;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.recbtn{height:42px;padding:0 18px 0 12px;border-radius:12px;border:1px solid rgba(244,63,94,.45);background:rgba(244,63,94,.1);color:#ffd5dc;font-weight:700;display:inline-flex;align-items:center;gap:10px}
+.recbtn .c{width:20px;height:20px;border-radius:50%;background:var(--rec);transition:all .2s}
+.recbtn.on{background:var(--rec);color:#fff}
+.recbtn.on .c{border-radius:5px;background:#fff;width:16px;height:16px}
+.recbtn:disabled{opacity:.4;cursor:not-allowed}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.seg button{height:30px;padding:0 11px;border:0;border-radius:7px;background:transparent;color:var(--mut);font-weight:600;font-size:13px}
+.seg button.sel{background:var(--panel2);color:var(--fg);box-shadow:0 1px 0 rgba(255,255,255,.04) inset,0 0 0 1px var(--line2)}
+.lbl{color:var(--mut);font-size:12.5px}
+.filestat{display:flex;align-items:center;justify-content:flex-end;gap:8px;color:var(--mut);font-size:12.5px;min-width:0;flex:1}
+.filestat span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link{background:none;border:0;color:var(--acc);padding:0;font-weight:600}
+
+/* ---------- sidebar ---------- */
+.side{border-inline-start:1px solid var(--line);background:#10131a;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.side::-webkit-scrollbar{width:8px}.side::-webkit-scrollbar-thumb{background:#262c37;border-radius:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.card h3{margin:0 0 12px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:8px}
+.card h3 .st{margin-inline-start:auto;text-transform:none;letter-spacing:0;font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;color:var(--mut)}
+.row{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+.row:first-of-type{margin-top:0}
+.pad{display:grid;grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px);gap:6px;justify-content:center;margin:12px 0 4px}
+.pad button{border-radius:12px;border:1px solid var(--line2);background:var(--panel2);font-size:16px;touch-action:none}
+.pad button:active,.pad button.held{background:var(--acc);border-color:var(--acc);color:#fff}
+.pad .c{background:transparent;border-style:dashed;color:var(--mut)}
+.slider{display:grid;grid-template-columns:104px 1fr 52px;align-items:center;gap:8px;margin-top:9px}
+.slider label{color:var(--mut);font-size:12.5px}
+.slider output{text-align:end;font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--fg)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent}
+input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:5px;background:linear-gradient(to right,var(--acc) var(--p,50%),#2a303b var(--p,50%))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;margin-top:-5.5px;border-radius:50%;background:#fff;border:0;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.toggle{display:flex;align-items:center;gap:10px;cursor:pointer}
+.toggle input{display:none}
+.toggle .sw{width:36px;height:21px;border-radius:21px;background:#2a303b;position:relative;transition:background .15s;flex:none}
+.toggle .sw::after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:15px;height:15px;border-radius:50%;background:#fff;transition:inset-inline-start .15s}
+.toggle input:checked+.sw{background:var(--acc)}
+.toggle input:checked+.sw::after{inset-inline-start:18px}
+.toggle .t{display:flex;flex-direction:column}
+.toggle .t small{color:var(--mut2);font-size:11.5px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);font-size:12.5px;font-weight:600}
+.chip.sel{background:rgba(79,140,255,.16);border-color:rgba(79,140,255,.55);color:#cfe0ff}
+.hint{color:var(--mut2);font-size:12px;margin-top:8px}
+.err{color:#fca5a5;font-size:12px;margin-top:8px}
+.foot{display:flex;align-items:center;gap:16px;padding:0 16px;border-top:1px solid var(--line);color:var(--mut2);font-size:12px;background:#0f1217}
+kbd{border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:11px;color:var(--mut);background:var(--panel)}
+[dir=rtl] .pad{direction:ltr}
+[dir=rtl] input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to left,var(--acc) var(--p,50%),#2a303b var(--p,50%))}
+.disc{position:fixed;inset:0;display:none;place-items:center;background:rgba(7,9,12,.85);z-index:10;font-size:16px;color:var(--mut)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><div class="logo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg></div>GimbalCam</div>
+    <span class="pill"><span class="dot" id="phoneDot"></span><span data-i="phone"></span> <b id="phoneTxt"></b></span>
+    <span class="pill"><span class="dot" id="gimbalDot"></span><span data-i="gimbal"></span> <b id="gimbalTxt"></b></span>
+    <span class="pill"><span data-i="latency"></span> <b id="latTxt">—</b> · <b id="fpsTxt">0</b> fps</span>
+    <div class="spacer"></div>
+    <select class="lang" id="lang" aria-label="Language">
+      <option value="tr">Türkçe</option><option value="en">English</option><option value="es">Español</option>
+      <option value="ru">Русский</option><option value="zh">中文</option><option value="ar">العربية</option>
+    </select>
+    <button class="btn" id="pauseBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span id="pauseTxt"></span></button>
+    <button class="stopbtn" id="stopBtn" data-it="stop_tip"><svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span data-i="stop"></span></button>
+    <button class="iconbtn" id="quitBtn" data-it="quit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg></button>
+  </header>
+
+  <div class="main">
+    <section class="stagewrap">
+      <div class="stage" id="stage">
+        <img id="preview" alt="">
+        <div class="badge"><div class="recbadge" id="recBadge"><i></i><span data-i="rec"></span> <span id="recTime">00:00</span></div></div>
+        <div class="overlay" id="qrOverlay">
+          <div class="qrcard">
+            <img id="qr" alt="QR">
+            <div>
+              <h2 data-i="qr_title"></h2>
+              <ol class="steps">
+                <li><span class="n">1</span><span data-i="qr_step1"></span></li>
+                <li><span class="n">2</span><span data-i="qr_step2"></span></li>
+                <li><span class="n">3</span><span data-i="qr_step3"></span></li>
+              </ol>
+              <p class="small" style="margin:14px 0 0"><span data-i="same_wifi"></span><br><span id="url" style="user-select:text"></span></p>
+            </div>
+          </div>
+        </div>
+        <div class="pausedov" id="pausedOv"><div><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg><span data-i="paused"></span></div></div>
+      </div>
+
+      <div class="recbar">
+        <button class="recbtn" id="recBtn"><span class="c"></span><span id="recBtnTxt"></span></button>
+        <span class="lbl" data-i="quality"></span>
+        <div class="seg" id="qualitySeg">
+          <button data-v="4k30">4K30</button><button data-v="1080p30">1080p30</button><button data-v="720p60">720p60</button>
+        </div>
+        <span class="lbl" data-i="zoom"></span>
+        <div class="seg" id="zoomSeg">
+          <button data-v="0.5">.5×</button><button data-v="1">1×</button><button data-v="2">2×</button><button data-v="5">5×</button>
+        </div>
+        <div class="filestat" id="fileStat"></div>
+        <button class="btn ghost" id="folderBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span data-i="open_folder"></span></button>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card">
+        <h3><span data-i="gimbal_card"></span><span class="st"><span class="dot" id="gDot2"></span><span id="gStatus"></span></span></h3>
+        <div class="row">
+          <button class="btn primary" id="gConnect"></button>
+          <div class="chips" id="gModes">
+            <button class="chip" data-v="PF">PF</button><button class="chip" data-v="L">L</button><button class="chip" data-v="F">F</button><button class="chip" data-v="POV">POV</button><button class="chip" data-v="GO">GO</button>
+          </div>
+        </div>
+        <div class="pad">
+          <span></span><button data-d="up">▲</button><span></span>
+          <button data-d="left">◀</button><button class="c" id="padStop">■</button><button data-d="right">▶</button>
+          <span></span><button data-d="down">▼</button><span></span>
+        </div>
+        <div class="slider"><label data-i="manual_speed"></label><input type="range" min="0.05" max="1" step="0.01" data-k="manual_speed"><output></output></div>
+      </div>
+
+      <div class="card">
+        <h3 data-i="tracking"></h3>
+        <div class="seg" id="trackSeg" style="width:100%;display:flex">
+          <button data-v="off" style="flex:1" data-i="off"></button><button data-v="face" style="flex:1" data-i="face"></button><button data-v="body" style="flex:1" data-i="body"></button>
+        </div>
+        <div class="row">
+          <span class="lbl" data-i="presets"></span>
+          <div class="chips" id="presets">
+            <button class="chip" data-v="slow" data-i="slow"></button><button class="chip" data-v="normal" data-i="normal"></button><button class="chip" data-v="fast" data-i="fast"></button>
+          </div>
+        </div>
+        <div class="slider"><label data-i="speed"></label><input type="range" min="0.1" max="1" step="0.01" data-k="max_speed" data-f="pct"><output></output></div>
+        <div class="slider"><label data-i="response"></label><input type="range" min="0.5" max="8" step="0.1" data-k="kp" data-f="f1"><output></output></div>
+        <div class="slider"><label data-i="smooth_start"></label><input type="range" min="0" max="0.9" step="0.01" data-k="smoothing" data-f="f2"><output></output></div>
+        <div class="slider"><label data-i="deadzone"></label><input type="range" min="0" max="0.15" step="0.005" data-k="deadzone" data-f="pct"><output></output></div>
+        <div class="slider"><label data-i="lead"></label><input type="range" min="0" max="0.4" step="0.01" data-k="lead" data-f="ms"><output></output></div>
+        <div class="row" style="margin-top:14px">
+          <label class="toggle"><input type="checkbox" data-k="sharp_stop"><span class="sw"></span><span class="t"><span data-i="sharp_stop"></span><small data-i="sharp_stop_hint"></small></span></label>
+        </div>
+        <div class="row">
+          <label class="toggle"><input type="checkbox" data-k="invert_pan"><span class="sw"></span><span data-i="invert_pan"></span></label>
+          <label class="toggle" style="margin-inline-start:14px"><input type="checkbox" data-k="invert_tilt"><span class="sw"></span><span data-i="invert_tilt"></span></label>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span data-i="vcam"></span><span class="st"><span class="dot" id="vDot"></span></span></h3>
+        <div class="row">
+          <label class="toggle"><input type="checkbox" data-k="vcam_on"><span class="sw"></span><span data-i="vcam_on"></span></label>
+          <div class="spacer"></div>
+          <div class="seg" id="vcamSize"><button data-v="1080p">1080p</button><button data-v="720p">720p</button></div>
+        </div>
+        <div class="hint" data-i="vcam_hint"></div>
+        <div class="err" id="vErr" style="display:none" data-i="vcam_error"></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    <span><kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> <span data-i="k_gimbal"></span></span>
+    <span><kbd>Esc</kbd> <span data-i="stop"></span></span>
+    <span><kbd>R</kbd> <span data-i="k_record"></span></span>
+    <span><kbd>P</kbd> <span data-i="k_pause"></span></span>
+    <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> <span data-i="k_track"></span></span>
+  </footer>
+</div>
+<div class="disc" id="disc"><span data-i="disconnected"></span></div>
+
+<script>
+"use strict";
+const I18N = {
+tr:{phone:"Telefon",gimbal:"Gimbal",latency:"Gecikme",stop:"DURDUR",stop_tip:"Tüm hareketi ve takibi durdur (Esc)",pause:"Duraklat",resume:"Devam et",paused:"Sistem duraklatıldı",quit:"Çıkış",
+qr_title:"Telefonu bağla",qr_step1:"iPhone Kamera ile bu QR kodu tarat",qr_step2:"Safari uyarı verirse: Ayrıntıları Göster → bu web sitesini ziyaret et",qr_step3:"“Kamerayı başlat”a dokun",same_wifi:"Telefon ve bilgisayar aynı Wi-Fi ağında olmalı.",
+rec:"KAYIT",record_start:"Kaydı başlat",record_stop:"Kaydı durdur",quality:"Kayıt",zoom:"Zoom",open_folder:"Kayıtlar",file_receiving:"Aktarılıyor: {name} · {mb} MB",file_done:"Kaydedildi: {name}",show:"Göster",
+gimbal_card:"Gimbal",connect:"Bağlan",disconnect:"Bağlantıyı kes",manual_speed:"Manuel hız",tracking:"Otomatik takip",off:"Kapalı",face:"Yüz",body:"Vücut",presets:"Hazır",slow:"Yavaş",normal:"Normal",fast:"Hızlı",
+speed:"Hız",response:"Tepki",smooth_start:"Yumuşak kalkış",deadzone:"Ölü bölge",lead:"Öngörü",sharp_stop:"Keskin durma",sharp_stop_hint:"Hedef merkeze gelince anında dur",invert_pan:"Pan ters",invert_tilt:"Tilt ters",
+vcam:"Sanal webcam",vcam_on:"Açık",vcam_hint:"Zoom, Teams veya OBS'de “OBS Virtual Camera”yı seç.",vcam_error:"Sanal kamera açılamadı. OBS Studio'yu kur (obsproject.com) ve tekrar aç.",
+k_gimbal:"gimbal",k_record:"kayıt",k_pause:"duraklat",k_track:"takip modu",disconnected:"Uygulamayla bağlantı koptu…",
+g_idle:"Bağlı değil",g_searching:"Aranıyor…",g_not_found:"Bulunamadı — açık mı, ZY Cami kapalı mı?",g_connecting:"Bağlanıyor…",g_connected:"Bağlı",g_error:"Bağlantı hatası",g_lost:"Bağlantı koptu",g_write_error:"Komut gönderilemedi",
+p_starting:"Başlatılıyor…",p_ready:"Bekleniyor",p_phone_connected:"Bağlı",p_phone_lost:"Koptu",p_server_error:"Sunucu hatası"},
+en:{phone:"Phone",gimbal:"Gimbal",latency:"Latency",stop:"STOP",stop_tip:"Stop all motion and tracking (Esc)",pause:"Pause",resume:"Resume",paused:"System paused",quit:"Quit",
+qr_title:"Connect your phone",qr_step1:"Scan this QR code with the iPhone Camera",qr_step2:"If Safari warns: Show Details → visit this website",qr_step3:"Tap “Start camera”",same_wifi:"Phone and computer must be on the same Wi-Fi network.",
+rec:"REC",record_start:"Start recording",record_stop:"Stop recording",quality:"Record",zoom:"Zoom",open_folder:"Recordings",file_receiving:"Receiving: {name} · {mb} MB",file_done:"Saved: {name}",show:"Show",
+gimbal_card:"Gimbal",connect:"Connect",disconnect:"Disconnect",manual_speed:"Manual speed",tracking:"Auto tracking",off:"Off",face:"Face",body:"Body",presets:"Presets",slow:"Slow",normal:"Normal",fast:"Fast",
+speed:"Speed",response:"Response",smooth_start:"Soft start",deadzone:"Dead zone",lead:"Look-ahead",sharp_stop:"Sharp stop",sharp_stop_hint:"Stop instantly when the subject is centred",invert_pan:"Invert pan",invert_tilt:"Invert tilt",
+vcam:"Virtual webcam",vcam_on:"On",vcam_hint:"Choose “OBS Virtual Camera” in Zoom, Teams or OBS.",vcam_error:"Couldn't start the virtual camera. Install OBS Studio (obsproject.com) and restart.",
+k_gimbal:"gimbal",k_record:"record",k_pause:"pause",k_track:"tracking mode",disconnected:"Lost connection to the app…",
+g_idle:"Not connected",g_searching:"Searching…",g_not_found:"Not found — is it on and ZY Cami closed?",g_connecting:"Connecting…",g_connected:"Connected",g_error:"Connection error",g_lost:"Connection lost",g_write_error:"Command failed",
+p_starting:"Starting…",p_ready:"Waiting",p_phone_connected:"Connected",p_phone_lost:"Lost",p_server_error:"Server error"},
+es:{phone:"Teléfono",gimbal:"Gimbal",latency:"Latencia",stop:"DETENER",stop_tip:"Detener todo movimiento y seguimiento (Esc)",pause:"Pausar",resume:"Reanudar",paused:"Sistema en pausa",quit:"Salir",
+qr_title:"Conecta tu teléfono",qr_step1:"Escanea este código QR con la Cámara del iPhone",qr_step2:"Si Safari avisa: Mostrar detalles → visitar este sitio web",qr_step3:"Toca «Iniciar cámara»",same_wifi:"El teléfono y el ordenador deben estar en la misma red Wi-Fi.",
+rec:"GRAB",record_start:"Iniciar grabación",record_stop:"Detener grabación",quality:"Grabar",zoom:"Zoom",open_folder:"Grabaciones",file_receiving:"Recibiendo: {name} · {mb} MB",file_done:"Guardado: {name}",show:"Mostrar",
+gimbal_card:"Gimbal",connect:"Conectar",disconnect:"Desconectar",manual_speed:"Velocidad manual",tracking:"Seguimiento automático",off:"Apagado",face:"Cara",body:"Cuerpo",presets:"Ajustes",slow:"Lento",normal:"Normal",fast:"Rápido",
+speed:"Velocidad",response:"Respuesta",smooth_start:"Arranque suave",deadzone:"Zona muerta",lead:"Anticipación",sharp_stop:"Parada brusca",sharp_stop_hint:"Detenerse al instante cuando el sujeto está centrado",invert_pan:"Invertir pan",invert_tilt:"Invertir tilt",
+vcam:"Webcam virtual",vcam_on:"Activada",vcam_hint:"Elige «OBS Virtual Camera» en Zoom, Teams u OBS.",vcam_error:"No se pudo iniciar la cámara virtual. Instala OBS Studio (obsproject.com) y reinicia.",
+k_gimbal:"gimbal",k_record:"grabar",k_pause:"pausa",k_track:"modo de seguimiento",disconnected:"Se perdió la conexión con la aplicación…",
+g_idle:"No conectado",g_searching:"Buscando…",g_not_found:"No encontrado: ¿está encendido y ZY Cami cerrado?",g_connecting:"Conectando…",g_connected:"Conectado",g_error:"Error de conexión",g_lost:"Conexión perdida",g_write_error:"Fallo al enviar",
+p_starting:"Iniciando…",p_ready:"Esperando",p_phone_connected:"Conectado",p_phone_lost:"Perdido",p_server_error:"Error del servidor"},
+ru:{phone:"Телефон",gimbal:"Стабилизатор",latency:"Задержка",stop:"СТОП",stop_tip:"Остановить всё движение и слежение (Esc)",pause:"Пауза",resume:"Продолжить",paused:"Система на паузе",quit:"Выход",
+qr_title:"Подключите телефон",qr_step1:"Отсканируйте QR-код камерой iPhone",qr_step2:"Если Safari предупредит: Подробнее → посетить этот веб-сайт",qr_step3:"Нажмите «Запустить камеру»",same_wifi:"Телефон и компьютер должны быть в одной сети Wi-Fi.",
+rec:"ЗАПИСЬ",record_start:"Начать запись",record_stop:"Остановить запись",quality:"Запись",zoom:"Зум",open_folder:"Записи",file_receiving:"Приём: {name} · {mb} МБ",file_done:"Сохранено: {name}",show:"Показать",
+gimbal_card:"Стабилизатор",connect:"Подключить",disconnect:"Отключить",manual_speed:"Ручная скорость",tracking:"Автослежение",off:"Выкл",face:"Лицо",body:"Тело",presets:"Пресеты",slow:"Медленно",normal:"Обычно",fast:"Быстро",
+speed:"Скорость",response:"Отклик",smooth_start:"Плавный старт",deadzone:"Мёртвая зона",lead:"Упреждение",sharp_stop:"Резкая остановка",sharp_stop_hint:"Мгновенно останавливаться, когда объект в центре",invert_pan:"Инверсия pan",invert_tilt:"Инверсия tilt",
+vcam:"Виртуальная веб-камера",vcam_on:"Вкл",vcam_hint:"Выберите «OBS Virtual Camera» в Zoom, Teams или OBS.",vcam_error:"Не удалось запустить виртуальную камеру. Установите OBS Studio (obsproject.com) и перезапустите.",
+k_gimbal:"стабилизатор",k_record:"запись",k_pause:"пауза",k_track:"режим слежения",disconnected:"Потеряно соединение с приложением…",
+g_idle:"Не подключён",g_searching:"Поиск…",g_not_found:"Не найден — включён ли он и закрыт ли ZY Cami?",g_connecting:"Подключение…",g_connected:"Подключён",g_error:"Ошибка подключения",g_lost:"Связь потеряна",g_write_error:"Ошибка отправки",
+p_starting:"Запуск…",p_ready:"Ожидание",p_phone_connected:"Подключён",p_phone_lost:"Отключён",p_server_error:"Ошибка сервера"},
+zh:{phone:"手机",gimbal:"云台",latency:"延迟",stop:"停止",stop_tip:"停止所有运动和跟踪 (Esc)",pause:"暂停",resume:"继续",paused:"系统已暂停",quit:"退出",
+qr_title:"连接手机",qr_step1:"用 iPhone 相机扫描此二维码",qr_step2:"如果 Safari 提示警告：显示详细信息 → 访问此网站",qr_step3:"点击“启动相机”",same_wifi:"手机和电脑必须连接同一个 Wi-Fi 网络。",
+rec:"录制",record_start:"开始录制",record_stop:"停止录制",quality:"录制",zoom:"变焦",open_folder:"录像",file_receiving:"接收中：{name} · {mb} MB",file_done:"已保存：{name}",show:"显示",
+gimbal_card:"云台",connect:"连接",disconnect:"断开",manual_speed:"手动速度",tracking:"自动跟踪",off:"关闭",face:"人脸",body:"人体",presets:"预设",slow:"慢",normal:"标准",fast:"快",
+speed:"速度",response:"灵敏度",smooth_start:"柔和起步",deadzone:"死区",lead:"预判",sharp_stop:"急停",sharp_stop_hint:"目标居中时立即停止",invert_pan:"反转水平",invert_tilt:"反转俯仰",
+vcam:"虚拟摄像头",vcam_on:"开启",vcam_hint:"在 Zoom、Teams 或 OBS 中选择 “OBS Virtual Camera”。",vcam_error:"无法启动虚拟摄像头。请安装 OBS Studio (obsproject.com) 后重启。",
+k_gimbal:"云台",k_record:"录制",k_pause:"暂停",k_track:"跟踪模式",disconnected:"与应用的连接已断开…",
+g_idle:"未连接",g_searching:"搜索中…",g_not_found:"未找到——是否已开机并关闭 ZY Cami？",g_connecting:"连接中…",g_connected:"已连接",g_error:"连接错误",g_lost:"连接已断开",g_write_error:"指令发送失败",
+p_starting:"启动中…",p_ready:"等待中",p_phone_connected:"已连接",p_phone_lost:"已断开",p_server_error:"服务器错误"},
+ar:{phone:"الهاتف",gimbal:"المثبّت",latency:"التأخير",stop:"إيقاف",stop_tip:"إيقاف كل الحركة والتتبع (Esc)",pause:"إيقاف مؤقت",resume:"استئناف",paused:"النظام متوقف مؤقتًا",quit:"خروج",
+qr_title:"وصّل هاتفك",qr_step1:"امسح رمز QR هذا بكاميرا iPhone",qr_step2:"إذا ظهر تحذير في Safari: إظهار التفاصيل ← زيارة هذا الموقع",qr_step3:"اضغط «تشغيل الكاميرا»",same_wifi:"يجب أن يكون الهاتف والحاسوب على شبكة Wi-Fi نفسها.",
+rec:"تسجيل",record_start:"بدء التسجيل",record_stop:"إيقاف التسجيل",quality:"التسجيل",zoom:"تكبير",open_folder:"التسجيلات",file_receiving:"جارٍ الاستلام: {name} · {mb} م.ب",file_done:"تم الحفظ: {name}",show:"عرض",
+gimbal_card:"المثبّت",connect:"اتصال",disconnect:"قطع الاتصال",manual_speed:"السرعة اليدوية",tracking:"التتبع التلقائي",off:"إيقاف",face:"الوجه",body:"الجسم",presets:"إعدادات جاهزة",slow:"بطيء",normal:"عادي",fast:"سريع",
+speed:"السرعة",response:"الاستجابة",smooth_start:"بدء ناعم",deadzone:"المنطقة الميتة",lead:"الاستباق",sharp_stop:"توقف حاد",sharp_stop_hint:"توقف فورًا عندما يكون الهدف في المركز",invert_pan:"عكس الأفقي",invert_tilt:"عكس العمودي",
+vcam:"كاميرا ويب افتراضية",vcam_on:"تشغيل",vcam_hint:"اختر «OBS Virtual Camera» في Zoom أو Teams أو OBS.",vcam_error:"تعذّر تشغيل الكاميرا الافتراضية. ثبّت OBS Studio (obsproject.com) ثم أعد التشغيل.",
+k_gimbal:"المثبّت",k_record:"تسجيل",k_pause:"إيقاف مؤقت",k_track:"وضع التتبع",disconnected:"انقطع الاتصال بالتطبيق…",
+g_idle:"غير متصل",g_searching:"جارٍ البحث…",g_not_found:"غير موجود — هل هو مشغّل وZY Cami مغلق؟",g_connecting:"جارٍ الاتصال…",g_connected:"متصل",g_error:"خطأ في الاتصال",g_lost:"انقطع الاتصال",g_write_error:"فشل إرسال الأمر",
+p_starting:"جارٍ البدء…",p_ready:"في الانتظار",p_phone_connected:"متصل",p_phone_lost:"منقطع",p_server_error:"خطأ في الخادم"},
+};
+
+const $ = id => document.getElementById(id);
+let lang = "tr", S = null, ws = null;
+const t = (k, vars) => { let s = (I18N[lang] && I18N[lang][k]) ?? I18N.en[k] ?? k; if (vars) for (const [a, b] of Object.entries(vars)) s = s.replace("{" + a + "}", b); return s; };
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+  document.querySelectorAll("[data-i]").forEach(e => e.textContent = t(e.dataset.i));
+  document.querySelectorAll("[data-it]").forEach(e => e.title = t(e.dataset.it));
+  $("lang").value = lang;
+  if (S) render(S);
+}
+
+// ---------- connection ----------
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.binaryType = "blob";
+  ws.onopen = () => $("disc").style.display = "none";
+  ws.onclose = () => { $("disc").style.display = "grid"; setTimeout(connect, 1000); };
+  let lastUrl = null;
+  ws.onmessage = e => {
+    if (typeof e.data === "string") { render(JSON.parse(e.data)); return; }
+    const url = URL.createObjectURL(e.data);
+    const img = $("preview");
+    img.onload = () => { if (lastUrl) URL.revokeObjectURL(lastUrl); lastUrl = url; };
+    img.src = url;
+  };
+}
+const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+// ---------- render ----------
+const fmt = {
+  pct: v => Math.round(v * 100) + "%", f1: v => (+v).toFixed(1), f2: v => (+v).toFixed(2), ms: v => Math.round(v * 1000) + " ms",
+  def: v => Math.round(v * 100) + "%",
+};
+function setRange(el, v) {
+  if (document.activeElement === el && el.dataset.dragging) return;
+  el.value = v; paintRange(el);
+}
+function paintRange(el) {
+  const p = (el.value - el.min) / (el.max - el.min) * 100;
+  el.style.setProperty("--p", p + "%");
+  el.nextElementSibling.textContent = (fmt[el.dataset.f] || fmt.def)(+el.value);
+}
+function selSeg(seg, v) { seg.querySelectorAll("button").forEach(b => b.classList.toggle("sel", String(b.dataset.v) === String(v))); }
+const mmss = s => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+
+function render(s) {
+  S = s;
+  if (s.settings.lang !== lang) { lang = s.settings.lang; applyLang(); return; }
+  const p = s.phone, g = s.gimbal;
+
+  $("phoneDot").className = "dot " + (p.connected ? "ok" : (p.status === "server_error" ? "bad" : "warn"));
+  $("phoneTxt").textContent = t("p_" + (p.connected ? "phone_connected" : p.status));
+  $("gimbalDot").className = $("gDot2").className = "dot " + (g.connected ? "ok" : (["error", "not_found", "lost"].includes(g.status) ? "bad" : (g.status === "idle" ? "" : "warn")));
+  $("gimbalTxt").textContent = t("g_" + (g.connected ? "connected" : g.status));
+  $("gStatus").textContent = t("g_" + (g.connected ? "connected" : g.status)) + (g.firmware ? ` · fw ${g.firmware.toFixed(2)}` : "");
+  $("gConnect").textContent = g.connected ? t("disconnect") : t("connect");
+  $("gConnect").classList.toggle("primary", !g.connected);
+  $("latTxt").textContent = s.stats.latency_ms != null && p.connected ? s.stats.latency_ms + " ms" : "—";
+  $("fpsTxt").textContent = p.connected ? s.stats.fps : 0;
+
+  $("qrOverlay").style.display = p.connected ? "none" : "grid";
+  if (s.qr && $("qr").dataset.src !== s.qr) { $("qr").src = s.qr; $("qr").dataset.src = s.qr; }
+  $("url").textContent = s.url;
+  if (!p.connected) $("preview").removeAttribute("src");
+
+  $("pausedOv").style.display = s.paused ? "grid" : "none";
+  $("pauseTxt").textContent = s.paused ? t("resume") : t("pause");
+  $("pauseBtn").classList.toggle("on", s.paused);
+
+  $("recBadge").style.display = p.recording ? "flex" : "none";
+  $("recTime").textContent = mmss(p.rec_secs || 0);
+  $("recBtn").classList.toggle("on", p.recording);
+  $("recBtn").disabled = !p.connected;
+  $("recBtnTxt").textContent = p.recording ? t("record_stop") : t("record_start");
+  selSeg($("qualitySeg"), p.quality);
+  $("qualitySeg").querySelectorAll("button").forEach(b => b.disabled = p.recording);
+  selSeg($("zoomSeg"), p.zoom);
+
+  const f = s.file;
+  const fs = $("fileStat");
+  if (f.event === "begin" || f.event === "progress") fs.innerHTML = `<span>${t("file_receiving", { name: esc(f.name), mb: (f.received / 1e6).toFixed(0) })}</span>`;
+  else if (f.event === "done") fs.innerHTML = `<span>${t("file_done", { name: esc(f.name) })}</span><button class="link" id="showFile">${t("show")}</button>`;
+  else fs.innerHTML = "";
+  const sf = $("showFile"); if (sf) sf.onclick = () => send({ cmd: "open_folder", path: f.path });
+
+  selSeg($("trackSeg"), s.track_mode);
+  document.querySelectorAll("input[type=range][data-k]").forEach(el => setRange(el, s.settings[el.dataset.k]));
+  document.querySelectorAll("input[type=checkbox][data-k]").forEach(el => el.checked = !!s.settings[el.dataset.k]);
+  selSeg($("vcamSize"), s.settings.vcam_size);
+  $("vDot").className = "dot " + (s.vcam.ok ? "ok" : s.vcam.ok === false ? "bad" : "");
+  $("vErr").style.display = s.vcam.ok === false ? "block" : "none";
+}
+const esc = x => String(x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------- controls ----------
+$("lang").onchange = e => {
+  const v = e.target.value;
+  send({ cmd: "set", key: "lang", value: v });
+  if (S) S.settings.lang = v;
+  lang = v; applyLang();
+};
+$("stopBtn").onclick = () => send({ cmd: "stop" });
+$("pauseBtn").onclick = () => send({ cmd: "pause", value: !(S && S.paused) });
+$("quitBtn").onclick = () => { send({ cmd: "quit" }); setTimeout(() => window.close(), 300); };
+$("recBtn").onclick = () => send({ cmd: "record", value: !(S && S.phone.recording) });
+$("folderBtn").onclick = () => send({ cmd: "open_folder" });
+$("gConnect").onclick = () => send({ cmd: S && S.gimbal.connected ? "gimbal_disconnect" : "gimbal_connect" });
+$("padStop").onclick = () => send({ cmd: "stop" });
+$("qualitySeg").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "quality", value: v }); };
+$("zoomSeg").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "zoom", value: +v }); };
+$("trackSeg").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "track", value: v }); };
+$("presets").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "preset", value: v }); };
+$("gModes").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "gimbal_mode", value: v }); };
+$("vcamSize").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "set", key: "vcam_size", value: v }); };
+document.querySelectorAll("input[type=range][data-k]").forEach(el => {
+  el.addEventListener("pointerdown", () => el.dataset.dragging = "1");
+  el.addEventListener("pointerup", () => delete el.dataset.dragging);
+  el.addEventListener("input", () => { paintRange(el); send({ cmd: "set", key: el.dataset.k, value: +el.value }); });
+});
+document.querySelectorAll("input[type=checkbox][data-k]").forEach(el =>
+  el.addEventListener("change", () => send({ cmd: "set", key: el.dataset.k, value: el.checked })));
+
+// d-pad (hold)
+document.querySelectorAll(".pad button[data-d]").forEach(b => {
+  const d = b.dataset.d;
+  b.addEventListener("pointerdown", e => { b.setPointerCapture(e.pointerId); b.classList.add("held"); send({ cmd: "manual", dir: d, on: true }); });
+  const up = () => { b.classList.remove("held"); send({ cmd: "manual", dir: d, on: false }); };
+  b.addEventListener("pointerup", up); b.addEventListener("pointercancel", up);
+});
+
+// keyboard
+const keyDir = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+const held = new Set();
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT") return;
+  if (keyDir[e.key]) {
+    e.preventDefault();
+    if (!held.has(e.key)) { held.add(e.key); send({ cmd: "manual", dir: keyDir[e.key], on: true }); }
+  } else if (e.key === "Escape") { send({ cmd: "stop" }); }
+  else if (e.key === "p" || e.key === "P") { send({ cmd: "pause", value: !(S && S.paused) }); }
+  else if (e.key === "r" || e.key === "R") { if (S && S.phone.connected) send({ cmd: "record", value: !S.phone.recording }); }
+  else if (["1", "2", "3"].includes(e.key)) { send({ cmd: "track", value: ["off", "face", "body"][+e.key - 1] }); }
+});
+window.addEventListener("keyup", e => {
+  if (keyDir[e.key]) { held.delete(e.key); send({ cmd: "manual", dir: keyDir[e.key], on: false }); }
+});
+window.addEventListener("blur", () => { for (const k of held) send({ cmd: "manual", dir: keyDir[k], on: false }); held.clear(); });
+
+applyLang();
+connect();
+</script>
+</body>
+</html>

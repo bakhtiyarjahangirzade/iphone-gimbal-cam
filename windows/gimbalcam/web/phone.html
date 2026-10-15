@@ -35,7 +35,7 @@ select{font:inherit;font-size:13px;background:rgba(0,0,0,.55);color:#fff;border:
 <video id="v" playsinline muted autoplay></video>
 
 <div class="top">
-  <span class="pill" id="conn"><span class="dot"></span><span id="connText">Bilgisayar bekleniyor</span></span>
+  <span class="pill" id="conn"><span class="dot"></span><span id="connText" data-t="wait"></span></span>
   <span class="pill" id="recPill" style="display:none"><span class="dot"></span><span id="recText">KAYIT 00:00</span></span>
   <select id="quality" aria-label="Kayıt kalitesi">
     <option value="4k30">Kayıt 4K30</option>
@@ -51,16 +51,35 @@ select{font:inherit;font-size:13px;background:rgba(0,0,0,.55);color:#fff;border:
 </div>
 
 <div id="msg"></div>
+<div id="pausedOv" style="position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.55);font-weight:700;font-size:20px" data-t="paused"></div>
 
 <div id="start">
   <h1>GimbalCam</h1>
-  <p>Telefonu yatay tut ve gimbale tak. Başlatınca kamera görüntüsü bilgisayara gider; kayıt telefonda yüksek kalitede yapılıp bilgisayara aktarılır.</p>
-  <button id="startBtn">Kamerayı başlat</button>
-  <p style="font-size:13px">Bu sayfa açık ve ekran açık kalmalı.</p>
+  <p data-t="title_p"></p>
+  <button id="startBtn" data-t="start"></button>
+  <p style="font-size:13px" data-t="keep"></p>
 </div>
 
 <script>
 "use strict";
+const L = {
+  tr:{wait:"Bilgisayar bekleniyor",ok:"Bilgisayar bağlı",rec:"KAYIT",q:"Kayıt",title_p:"Telefonu yatay tut ve gimbale tak. Görüntü bilgisayara gider; kayıt telefonda yüksek kalitede yapılıp bilgisayara aktarılır.",start:"Kamerayı başlat",keep:"Bu sayfa ve ekran açık kalmalı.",rec_fail:"Kayıt başlatılamadı",rec_done:"Kayıt bilgisayara aktarıldı ✔",up_left:"Aktarılıyor… {mb} MB kaldı",up_offline:"Bağlantı yok — {mb} MB bekliyor",no_q:"Kayıt sırasında kalite değiştirilemez",cam_err:"Kamera hatası",no_zoom:"Zoom desteklenmiyor",enc_err:"Kodlayıcı hatası",no_wc:"Bu tarayıcı WebCodecs desteklemiyor (iOS 16.4+ gerekli)",paused:"Bilgisayar duraklattı"},
+  en:{wait:"Waiting for computer",ok:"Computer connected",rec:"REC",q:"Record",title_p:"Hold the phone in landscape on the gimbal. Video goes to the computer; recording happens on the phone in high quality and is transferred automatically.",start:"Start camera",keep:"Keep this page open and the screen on.",rec_fail:"Couldn't start recording",rec_done:"Recording transferred ✔",up_left:"Transferring… {mb} MB left",up_offline:"Offline — {mb} MB waiting",no_q:"Can't change quality while recording",cam_err:"Camera error",no_zoom:"Zoom not supported",enc_err:"Encoder error",no_wc:"This browser lacks WebCodecs (needs iOS 16.4+)",paused:"Paused by computer"},
+  es:{wait:"Esperando al ordenador",ok:"Ordenador conectado",rec:"GRAB",q:"Grabar",title_p:"Coloca el teléfono en horizontal en el gimbal. El vídeo va al ordenador; la grabación se hace en el teléfono en alta calidad y se transfiere sola.",start:"Iniciar cámara",keep:"Mantén esta página abierta y la pantalla encendida.",rec_fail:"No se pudo grabar",rec_done:"Grabación transferida ✔",up_left:"Transfiriendo… faltan {mb} MB",up_offline:"Sin conexión — {mb} MB en espera",no_q:"No se puede cambiar la calidad mientras se graba",cam_err:"Error de cámara",no_zoom:"Zoom no compatible",enc_err:"Error del codificador",no_wc:"Este navegador no tiene WebCodecs (iOS 16.4+)",paused:"Pausado por el ordenador"},
+  ru:{wait:"Ожидание компьютера",ok:"Компьютер подключён",rec:"ЗАПИСЬ",q:"Запись",title_p:"Закрепите телефон горизонтально на стабилизаторе. Видео идёт на компьютер; запись ведётся на телефоне в высоком качестве и передаётся автоматически.",start:"Запустить камеру",keep:"Не закрывайте страницу и не выключайте экран.",rec_fail:"Не удалось начать запись",rec_done:"Запись передана ✔",up_left:"Передача… осталось {mb} МБ",up_offline:"Нет связи — ждут {mb} МБ",no_q:"Нельзя менять качество во время записи",cam_err:"Ошибка камеры",no_zoom:"Зум не поддерживается",enc_err:"Ошибка кодировщика",no_wc:"Нет WebCodecs (нужна iOS 16.4+)",paused:"Пауза с компьютера"},
+  zh:{wait:"等待电脑连接",ok:"电脑已连接",rec:"录制",q:"录制",title_p:"将手机横向装在云台上。画面会传到电脑；录像在手机上以高画质进行并自动传输。",start:"启动相机",keep:"请保持此页面打开且屏幕常亮。",rec_fail:"无法开始录制",rec_done:"录像已传输 ✔",up_left:"传输中… 剩余 {mb} MB",up_offline:"已断开 — {mb} MB 等待中",no_q:"录制时无法更改画质",cam_err:"相机错误",no_zoom:"不支持变焦",enc_err:"编码器错误",no_wc:"此浏览器不支持 WebCodecs（需 iOS 16.4+）",paused:"电脑已暂停"},
+  ar:{wait:"في انتظار الحاسوب",ok:"الحاسوب متصل",rec:"تسجيل",q:"تسجيل",title_p:"ثبّت الهاتف أفقيًا على المثبّت. يذهب الفيديو إلى الحاسوب؛ ويتم التسجيل على الهاتف بجودة عالية ويُنقل تلقائيًا.",start:"تشغيل الكاميرا",keep:"أبقِ هذه الصفحة مفتوحة والشاشة مضاءة.",rec_fail:"تعذّر بدء التسجيل",rec_done:"تم نقل التسجيل ✔",up_left:"جارٍ النقل… متبقٍ {mb} م.ب",up_offline:"غير متصل — {mb} م.ب في الانتظار",no_q:"لا يمكن تغيير الجودة أثناء التسجيل",cam_err:"خطأ في الكاميرا",no_zoom:"التكبير غير مدعوم",enc_err:"خطأ في الترميز",no_wc:"المتصفح لا يدعم WebCodecs (يتطلب iOS 16.4+)",paused:"أوقفه الحاسوب مؤقتًا"},
+};
+let lang = new URLSearchParams(location.search).get("l") || "tr";
+const T = k => (L[lang] || L.en)[k] ?? L.en[k] ?? k;
+function applyLang(l) {
+  if (l) lang = L[l] ? l : "en";
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+  document.querySelectorAll("[data-t]").forEach(e => e.textContent = T(e.dataset.t));
+  document.querySelectorAll("#quality option").forEach(o => o.textContent = `${T("q")} ${o.value.toUpperCase().replace("P", "p")}`);
+  if (typeof wsOpen === "function") setConn(wsOpen());
+}
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const token = new URLSearchParams(location.search).get("t") || "";
@@ -78,7 +97,7 @@ let ws, stream = null, track = null, quality = "4k30";
 let encoder = null, canvas = null, ctx = null, encW = 0, encH = 0;
 let needKey = true, frameNo = 0, lastEnc = 0, spsPps = null;
 let recorder = null, recQueue = [], recSending = false, recStopped = false, recName = "", recSent = 0, recStart = 0, recTimer = null;
-let wakeLock = null;
+let wakeLock = null, paused = false;
 
 function toast(s, ms = 3000) {
   const m = $("msg"); m.textContent = s; m.style.display = "block";
@@ -147,7 +166,7 @@ function wsOpen() { return ws.readyState === 1; }
 function sendJSON(o) { ws.send(JSON.stringify(o)); }
 function setConn(on) {
   $("conn").querySelector(".dot").classList.toggle("on", on);
-  $("connText").textContent = on ? "Bilgisayar bağlı" : "Bilgisayar bekleniyor";
+  $("connText").textContent = on ? T("ok") : T("wait");
 }
 function sendHello() {
   const s = track ? track.getSettings() : {};
@@ -164,6 +183,8 @@ function handleCmd(c) {
     case "keyframe": needKey = true; break;
     case "quality": if (QUALITY[c.value]) changeQuality(c.value); break;
     case "status": sendHello(); break;
+    case "lang": applyLang(c.value); break;
+    case "pause": paused = !!c.value; $("pausedOv").style.display = paused ? "grid" : "none"; needKey = true; break;
   }
 }
 
@@ -183,9 +204,9 @@ async function openCamera() {
 }
 
 async function changeQuality(q) {
-  if (recorder) { toast("Kayıt sırasında kalite değiştirilemez"); $("quality").value = quality; return; }
+  if (recorder) { toast(T("no_q")); $("quality").value = quality; return; }
   quality = q; $("quality").value = q;
-  try { await openCamera(); toast("Kalite: " + q); } catch (e) { toast("Kamera hatası: " + e.message); }
+  try { await openCamera(); toast(q); } catch (e) { toast(T("cam_err") + ": " + e.message); }
 }
 
 function buildZoomButtons() {
@@ -203,7 +224,7 @@ function buildZoomButtons() {
 function markZoom(v) { document.querySelectorAll("#zooms button").forEach(b => b.classList.toggle("sel", Math.abs(+b.dataset.z - v) < 0.01)); }
 async function setZoom(v) {
   if (!track) return;
-  try { await track.applyConstraints({ advanced: [{ zoom: v }] }); markZoom(v); } catch (e) { toast("Zoom desteklenmiyor"); }
+  try { await track.applyConstraints({ advanced: [{ zoom: v }] }); markZoom(v); } catch (e) { toast(T("no_zoom")); }
 }
 
 // ---------------- Live preview encoder (720p H.264 → PC) ----------------
@@ -270,7 +291,7 @@ function setupEncoder(w, h) {
     error: e => {
       if (encoder !== enc) return;
       if (!encOk && encAttempt < configs.length - 1) { encAttempt++; setupEncoder(encW, encH); return; }
-      toast("Kodlayıcı hatası: " + e.message);
+      toast(T("enc_err") + ": " + e.message);
       setTimeout(() => { encoder = null; }, 1000);
     },
   });
@@ -290,7 +311,7 @@ function onVideoFrame(now) {
   const landscape = vw >= vh;
   const w = landscape ? 1280 : 720, h = landscape ? 720 : 1280;
   if (w !== encW || h !== encH || !encoder || encoder.state === "closed") setupEncoder(w, h);
-  if (!wsOpen()) return;
+  if (!wsOpen() || paused) return;
   if (now - lastEnc < 1000 / PREVIEW_FPS - 4) return;
   if (encoder.encodeQueueSize > 2) { needKey = true; return; }
   lastEnc = now;
@@ -303,27 +324,30 @@ function onVideoFrame(now) {
   vf.close();
 }
 
-// ---------------- High-quality recording (streams to PC while recording) ----------------
+// ---------------- High-quality recording ----------------
+// Uploaded on its OWN connection (POST /rec, strictly sequential) so it never delays the live preview.
 function startRec() {
   if (recorder || !stream) return;
   const q = QUALITY[quality];
-  const mime = ["video/mp4;codecs=avc1", "video/mp4"].find(t => MediaRecorder.isTypeSupported(t));
+  const mime = ["video/mp4;codecs=avc1", "video/mp4"].find(x => MediaRecorder.isTypeSupported(x));
   try { recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: q.bitrate, audioBitsPerSecond: 192000 }); }
-  catch (e) { toast("Kayıt başlatılamadı: " + e.message); recorder = null; return; }
+  catch (e) { toast(T("rec_fail") + ": " + e.message); recorder = null; return; }
   const d = new Date(), p = n => String(n).padStart(2, "0");
   recName = `GimbalCam_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}_${quality}.mp4`;
-  recSent = 0; recStopped = false; recQueue = [];
-  sendJSON({ type: "rec_begin", name: recName });
-  recorder.ondataavailable = e => { if (e.data && e.data.size) { recQueue.push(e.data); pumpRec(); } };
-  recorder.onstop = () => { recStopped = true; pumpRec(); };
+  recSent = 0; recStopped = false;
+  recQueue = [{ op: "begin" }];
+  recorder.ondataavailable = e => { if (e.data && e.data.size) { recQueue.push({ op: "data", blob: e.data }); pumpRec(); } };
+  recorder.onstop = () => { recQueue.push({ op: "end" }); recStopped = true; pumpRec(); };
   recorder.start(1000);
+  pumpRec();
   recStart = Date.now();
   $("recBtn").classList.add("on"); $("recPill").style.display = ""; $("recPill").classList.add("rec");
   $("quality").disabled = true;
-  recTimer = setInterval(() => {
-    const t = Math.floor((Date.now() - recStart) / 1000);
-    $("recText").textContent = `KAYIT ${p(Math.floor(t / 60))}:${p(t % 60)}`;
-  }, 500);
+  const tick = () => {
+    const s = Math.floor((Date.now() - recStart) / 1000);
+    $("recText").textContent = `${T("rec")} ${p(Math.floor(s / 60))}:${p(s % 60)}`;
+  };
+  tick(); recTimer = setInterval(tick, 500);
   sendJSON({ type: "recording", value: true });
 }
 
@@ -341,32 +365,37 @@ async function pumpRec() {
   recSending = true;
   try {
     while (recQueue.length) {
-      if (!wsOpen()) { showUpload(); return; }
-      if (ws.bufferedAmount > 1_500_000) { await sleep(20); continue; } // keep room for live preview
-      const blob = recQueue.shift();
-      const buf = new Uint8Array(await blob.arrayBuffer());
-      const msg = new Uint8Array(buf.length + 1); msg[0] = 3; msg.set(buf, 1);
-      ws.send(msg);
-      recSent += buf.length;
-      showUpload();
-    }
-    if (recStopped && wsOpen()) {
-      while (ws.bufferedAmount > 0) await sleep(100);
-      sendJSON({ type: "rec_end", name: recName, size: recSent });
-      toast("Kayıt bilgisayara aktarıldı ✔", 4000);
-      recorder = null; recStopped = false;
-      $("upPill").style.display = "none";
+      const item = recQueue[0];
+      let url = `/rec?${qs}&op=${item.op}`, body;
+      if (item.op === "begin") url += `&name=${encodeURIComponent(recName)}`;
+      if (item.op === "data") body = item.blob;
+      try {
+        const r = await fetch(url, { method: "POST", body, cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+      } catch {
+        showUpload(true);
+        await sleep(1000);          // offline: keep the chunk and retry
+        continue;
+      }
+      recQueue.shift();
+      if (item.op === "data") recSent += item.blob.size;
+      if (item.op === "end") {
+        toast(T("rec_done"), 4000);
+        recorder = null; recStopped = false;
+        $("upPill").style.display = "none";
+      }
+      showUpload(false);
     }
   } finally { recSending = false; }
 }
 
-function showUpload() {
-  const pending = recQueue.reduce((a, b) => a + b.size, 0);
+function showUpload(offline) {
+  const pending = recQueue.reduce((a, b) => a + (b.blob ? b.blob.size : 0), 0);
   const el = $("upPill");
-  if (pending > 2_000_000 || (recStopped && recQueue.length)) {
+  if (offline || pending > 3_000_000 || (recStopped && recQueue.length)) {
     el.style.display = "";
-    el.textContent = wsOpen() ? `Aktarılıyor… ${(pending / 1e6).toFixed(0)} MB kaldı` : `Bağlantı yok — ${(pending / 1e6).toFixed(0)} MB bekliyor`;
-  } else if (!recStopped) el.style.display = "none";
+    el.textContent = (offline ? T("up_offline") : T("up_left")).replace("{mb}", (pending / 1e6).toFixed(0));
+  } else el.style.display = "none";
 }
 
 // ---------------- Misc ----------------
@@ -379,14 +408,15 @@ $("recBtn").onclick = () => recorder && !recStopped ? stopRec() : startRec();
 $("quality").onchange = e => changeQuality(e.target.value);
 
 $("startBtn").onclick = async () => {
-  if (!window.VideoEncoder) { toast("Bu tarayıcı WebCodecs desteklemiyor (iOS 16.4+ Safari gerekli)", 6000); }
+  if (!window.VideoEncoder) { toast(T("no_wc"), 6000); }
   try { await openCamera(); }
-  catch (e) { toast("Kamera açılamadı: " + e.message, 6000); return; }
+  catch (e) { toast(T("cam_err") + ": " + e.message, 6000); return; }
   $("start").style.display = "none";
   keepAwake();
   video.requestVideoFrameCallback(onVideoFrame);
   connectWS();
 };
+applyLang();
 window.addEventListener("beforeunload", e => { if (recorder || recQueue.length) { e.preventDefault(); e.returnValue = ""; } });
 </script>
 </body>
