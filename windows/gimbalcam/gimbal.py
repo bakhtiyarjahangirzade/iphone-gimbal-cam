@@ -32,7 +32,7 @@ class Gimbal:
     """
 
     def __init__(self, on_status=None, on_info=None):
-        self.on_status = on_status or (lambda s: None)
+        self.on_status = on_status or (lambda k, d: None)
         self.on_info = on_info or (lambda d: None)
         self.loop = asyncio.new_event_loop()
         threading.Thread(target=self.loop.run_forever, daemon=True).start()
@@ -86,12 +86,12 @@ class Gimbal:
         try:
             await self.client.write_gatt_char(WRITE_UUID, pkt, response=False)
         except Exception as e:  # noqa: BLE001
-            self.on_status(f"Gimbal yazma hatası: {e}")
+            self.on_status("write_error", str(e))
 
     async def _connect(self):
         if self.connected:
             return
-        self.on_status("Gimbal aranıyor…")
+        self.on_status("searching", "")
 
         def match(d, adv):
             name = (d.name or adv.local_name or "").upper()
@@ -100,18 +100,18 @@ class Gimbal:
 
         dev = await BleakScanner.find_device_by_filter(match, timeout=12)
         if not dev:
-            self.on_status("Gimbal bulunamadı. Açık mı, telefonun Bluetooth'u / ZY Cami kapalı mı?")
+            self.on_status("not_found", "")
             return
-        self.on_status(f"Bağlanıyor: {dev.name}")
+        self.on_status("connecting", dev.name or "")
         self.client = BleakClient(dev, disconnected_callback=self._on_disconnect)
         try:
             await self.client.connect(timeout=15)
             await self.client.start_notify(NOTIFY_UUID, self._on_notify)
         except Exception as e:  # noqa: BLE001
-            self.on_status(f"Gimbal bağlantı hatası: {e}")
+            self.on_status("error", str(e))
             return
         self.connected = True
-        self.on_status(f"Gimbal bağlı: {dev.name}")
+        self.on_status("connected", dev.name or "")
         self.query(0x04)  # firmware
         self._task = asyncio.create_task(self._send_loop())
 
@@ -126,7 +126,7 @@ class Gimbal:
 
     def _on_disconnect(self, _client):
         self.connected = False
-        self.on_status("Gimbal bağlantısı koptu")
+        self.on_status("lost", "")
 
     def _on_notify(self, _handle, data: bytearray):
         if len(data) >= 12 and data[0] == 0x24 and data[1] == 0x3E and data[4:6] == b"\x18\x12":

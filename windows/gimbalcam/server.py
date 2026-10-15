@@ -106,6 +106,9 @@ class PhoneServer:
         self.on_file = on_file
         self.on_connection = on_connection
         self.loop = asyncio.new_event_loop()
+        self.extra_sites = []   # [(aiohttp app, host, port)] e.g. the local control panel
+        self._runners = []
+        self.started = threading.Event()
         self.sid = None
         self.last_seen = 0.0
         self._connected = False
@@ -114,6 +117,7 @@ class PhoneServer:
         self.ips = lan_ips()
         self.port = PORT
         self.stats_bytes = 0
+        self.stats_mbps = 0.0
         self.latency_ms = None
         self.rec_fh = None
         self.rec_info = {}
@@ -135,18 +139,43 @@ class PhoneServer:
             app = web.Application(client_max_size=64 * 1024 * 1024)
             app.router.add_get("/", self._index)
             app.router.add_post("/up", self._up)
+            app.router.add_post("/rec", self._rec)
             app.router.add_get("/poll", self._poll)
             runner = web.AppRunner(app, access_log=None)
             self.loop.run_until_complete(runner.setup())
             site = web.TCPSite(runner, "0.0.0.0", self.port, ssl_context=sslctx)
             self.loop.run_until_complete(site.start())
+            self._runners = [runner]
+            for extra_app, host, port in self.extra_sites:
+                r = web.AppRunner(extra_app, access_log=None)
+                self.loop.run_until_complete(r.setup())
+                self.loop.run_until_complete(web.TCPSite(r, host, port).start())
+                self._runners.append(r)
             self.cmd_queue = asyncio.Queue()
             self.loop.create_task(self._watchdog())
-            self.on_status("QR kodu iPhone Kamera ile tarat")
+            self.on_status("ready", "")
         except OSError as e:
-            self.on_status(f"Sunucu başlatılamadı (port {self.port}): {e}")
+            self.on_status("server_error", f"port {self.port}: {e}")
+            self.started.set()
             return
+        self.started.set()
         self.loop.run_forever()
+
+    def stop(self):
+        """Close the recording file and stop the event loop (safe to call from any thread)."""
+        self._close_rec()
+
+        async def _shutdown():
+            for r in self._runners:
+                try:
+                    await r.cleanup()
+                except Exception:  # noqa: BLE001
+                    pass
+            self.loop.stop()
+        try:
+            asyncio.run_coroutine_threadsafe(_shutdown(), self.loop).result(timeout=3)
+        except Exception:  # noqa: BLE001
+            pass
 
     async def _index(self, request):
         return web.FileResponse(WEB_DIR / "phone.html", headers={"Cache-Control": "no-store"})
@@ -164,7 +193,7 @@ class PhoneServer:
         if not self._connected:
             self._connected = True
             self.on_connection(True)
-            self.on_status(f"Telefon bağlı ({remote})")
+            self.on_status("phone_connected", str(remote))
 
     async def _up(self, request):
         """Phone -> PC: body is a batch of [len u32 BE][message] items."""
@@ -191,6 +220,25 @@ class PhoneServer:
                 self._on_binary(msg)
         return web.Response(text="ok", headers={"Cache-Control": "no-store"})
 
+    async def _rec(self, request):
+        """Recording upload on its own connection, so it never delays the live preview.
+        ?op=begin&name=..  |  ?op=data (body = bytes)  |  ?op=end"""
+        if not self._authorized(request):
+            return web.Response(status=403, text="Geçersiz QR")
+        self._touch(request.query.get("sid", ""), request.remote)
+        op = request.query.get("op", "data")
+        if op == "begin":
+            self._on_text({"type": "rec_begin", "name": request.query.get("name", "")})
+        elif op == "end":
+            self._on_text({"type": "rec_end"})
+        else:
+            body = await request.read()
+            if self.rec_fh:
+                self.rec_fh.write(body)
+                self.rec_info["received"] += len(body)
+                self.on_file("progress", dict(self.rec_info))
+        return web.Response(text="ok", headers={"Cache-Control": "no-store"})
+
     async def _poll(self, request):
         """PC -> phone: long-poll for commands."""
         if not self._authorized(request):
@@ -210,10 +258,12 @@ class PhoneServer:
     async def _watchdog(self):
         while True:
             await asyncio.sleep(1)
+            self.stats_mbps = self.stats_bytes * 8 / 1e6
+            self.stats_bytes = 0
             if self._connected and time.monotonic() - self.last_seen > 4:
                 self._connected = False
                 self.on_connection(False)
-                self.on_status("Telefon bağlantısı koptu — sayfa açıksa kendiliğinden bağlanır")
+                self.on_status("phone_lost", "")
 
     def _on_binary(self, data: bytes):
         kind = data[0]
