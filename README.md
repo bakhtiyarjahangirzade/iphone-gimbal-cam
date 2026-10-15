@@ -6,8 +6,8 @@ iPhone 15 Pro Max'i Windows'ta yüksek kaliteli webcam olarak kullanmak ve Zhiyu
 
 | Klasör | Ne yapar |
 |---|---|
-| `ios/` | iPhone uygulaması: kamera → H.264 canlı yayın (USB/Wi-Fi, port 5005), 4K60 HEVC kayıt ve bilgisayara aktarım |
-| `windows/` | Windows uygulaması: görüntü alma, sanal webcam, gimbal kontrolü, takip *(yakında)* |
+| `windows/` | **Ana uygulama.** Ekranda QR gösterir; iPhone Safari ile bağlanır (uygulama kurmadan). 720p canlı önizleme, kafa/vücut takibi, gimbal kontrolü, sanal webcam; telefonda 4K30 kayıt ve otomatik aktarım (`Videolar\GimbalCam`) |
+| `ios/` | İsteğe bağlı yerli iPhone uygulaması (4K60 kayıt için ileride) |
 | `tools/gimbal-test.html` | Tarayıcıdan (Chrome/Edge) gimbal test aracı |
 
 ## Gimbal protokolü (Crane M2S, firmware 1.73)
@@ -16,6 +16,13 @@ iPhone 15 Pro Max'i Windows'ta yüksek kaliteli webcam olarak kullanmak ve Zhiyu
 - Paket: `24 3C | uzunluk (LE, 2B) | 18 12 | sıra | 01 | komut | veri | CRC16-XMODEM (LE)`
 - Joystick: komut = eksen (01 tilt, 02 pan, 03 roll), veri = `10` + değer (LE, 0–4095, merkez 2048)
 - Sorgu 04 → firmware ×100 (173 = 1.73)
+
+## Kullanım
+
+1. [Releases → latest](../../releases/tag/latest) sayfasından `GimbalCam-windows.zip` indir, çıkar, `GimbalCam.exe` çalıştır. Windows Güvenlik Duvarı sorarsa **Özel ağlar**a izin ver.
+2. Ekrandaki QR kodu iPhone Kamera ile tarat. Safari ilk seferde “bağlantı gizli değil” der: *Ayrıntıları Göster → bu web sitesini ziyaret et*.
+3. **Kamerayı başlat** → görüntü bilgisayarda. Gimbale bağlan, takibi aç.
+4. Sanal webcam için [OBS Studio](https://obsproject.com) kurulu olmalı; Zoom/Teams'te “OBS Virtual Camera” seç.
 
 ## iOS derleme
 
