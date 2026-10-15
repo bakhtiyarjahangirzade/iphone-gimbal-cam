@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LiDAR Testi</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1b1f24;--mut:#5d6672;--line:#dde1e6;--acc:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--fg:#e8ebef;--mut:#9aa3ad;--line:#2c323a;--acc:#60a5fa}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:21px;margin:0 0 6px}p{color:var(--mut);margin:0 0 12px}
+button{font:inherit;font-weight:600;background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px 16px;width:100%;margin:6px 0}
+button.sec{background:transparent;color:var(--acc);border:1px solid var(--line)}
+pre{white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;padding:10px}
+</style>
+</head>
+<body>
+<main>
+<h1>Safari LiDAR / AR testi</h1>
+<p>Safari'nin web sayfalarına LiDAR derinlik verisi veya AR verip vermediğini kontrol eder. 10 saniye sürer.</p>
+<button id="run">Testi başlat</button>
+<pre id="out">Hazır.</pre>
+<button class="sec" id="copy">Sonucu kopyala</button>
+</main>
+<script>
+const out = document.getElementById("out"), L = [];
+const log = s => { L.push(s); out.textContent = L.join("\n"); };
+document.getElementById("run").onclick = async () => {
+  L.length = 0;
+  log(navigator.userAgent);
+  log("navigator.xr: " + ("xr" in navigator ? "VAR" : "YOK"));
+  if (navigator.xr) {
+    for (const m of ["immersive-ar", "immersive-vr", "inline"]) {
+      try { log(`  ${m}: ${await navigator.xr.isSessionSupported(m) ? "evet" : "hayır"}`); }
+      catch (e) { log(`  ${m}: HATA ${e.message}`); }
+    }
+    try {
+      const s = await navigator.xr.requestSession("immersive-ar", { optionalFeatures: ["depth-sensing", "mesh-detection", "plane-detection", "hit-test"],
+        depthSensing: { usagePreference: ["cpu-optimized", "gpu-optimized"], dataFormatPreference: ["luminance-alpha", "float32"] } });
+      log("  AR oturumu AÇILDI. enabledFeatures: " + JSON.stringify(s.enabledFeatures || []));
+      await s.end();
+    } catch (e) { log("  AR oturumu açılamadı: " + e.name + " " + e.message); }
+  }
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput").map(d => d.label);
+    log("Kameralar: " + devs.join(" | "));
+    log("LiDAR/derinlik kamerası listede: " + (devs.some(l => /lidar|depth|truedepth/i.test(l)) ? "EVET" : "hayır"));
+    const caps = st.getVideoTracks()[0].getCapabilities?.() || {};
+    log("Derinlik ile ilgili yetenekler: " + (Object.keys(caps).filter(k => /depth|focal|distance/i.test(k)).join(", ") || "yok"));
+    st.getTracks().forEach(t => t.stop());
+  } catch (e) { log("Kamera: HATA " + e.message); }
+  log("BİTTİ ✔");
+};
+document.getElementById("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText(out.textContent); document.getElementById("copy").textContent = "Kopyalandı ✔"; }
+  catch { document.getElementById("copy").textContent = "Metni elle seç"; }
+};
+</script>
+</body>
+</html>
