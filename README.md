@@ -7,7 +7,8 @@ iPhone 15 Pro Max'i Windows'ta yüksek kaliteli webcam olarak kullanmak ve Zhiyu
 | Klasör | Ne yapar |
 |---|---|
 | `windows/` | **Ana uygulama.** Ekranda QR gösterir; iPhone Safari ile bağlanır (uygulama kurmadan). 720p canlı önizleme, kafa/vücut takibi, gimbal kontrolü, sanal webcam; telefonda 4K30 kayıt ve otomatik aktarım (`Videolar\GimbalCam`) |
-| `ios/` | İsteğe bağlı yerli iPhone uygulaması (4K60 kayıt için ileride) |
+| `ios-scan/` | **GimbalScan** iPhone uygulaması: LiDAR ile oda taraması (Apple RoomPlan: duvar/kapı/pencere/eşya + detaylı LiDAR mesh), canlı olarak PC'ye akış |
+| `ios/` | İsteğe bağlı yerli iPhone kamera uygulaması (4K60 kayıt için ileride) |
 | `tools/gimbal-test.html` | Tarayıcıdan (Chrome/Edge) gimbal test aracı |
 
 ## Gimbal protokolü (Crane M2S, firmware 1.73)
@@ -25,6 +26,13 @@ iPhone 15 Pro Max'i Windows'ta yüksek kaliteli webcam olarak kullanmak ve Zhiyu
    - Kısayollar: ok tuşları = gimbal, **Esc = DURDUR**, R = kayıt, P = duraklat, 1/2/3 = takip modu.
    - Dil: Türkçe, English, Español, Русский, 中文, العربية (sağ üstten).
 4. Sanal webcam için [OBS Studio](https://obsproject.com) kurulu olmalı; Zoom/Teams'te “OBS Virtual Camera” seç.
+
+## 3D Tarama (LiDAR)
+
+1. Releases'ten `GimbalScan.ipa` indir → Sideloadly ile iPhone'a yükle (ücretsiz Apple ID).
+2. GimbalCam panelinde **3D Tarama** sekmesi → GimbalScan uygulamasıyla QR'ı okut.
+3. **Taramayı başlat** → gimbale bağlan → **360° başlat**: gimbal +20°, 0°, −20° seviyelerinde tam tur döner (açı LiDAR konumundan okunur).
+4. **Bitir** → `Belgeler\GimbalScan\Tarama_...` klasörüne: `Oda_*.usdz`, `kat_plani.svg`, `oda.json`, `mesh.obj`, `mesh.ply`.
 
 ## iOS derleme
 
