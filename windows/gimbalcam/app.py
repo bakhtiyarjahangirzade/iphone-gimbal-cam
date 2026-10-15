@@ -11,7 +11,6 @@ from pathlib import Path
 from tkinter import ttk
 
 import cv2
-import numpy as np
 from PIL import Image, ImageTk
 
 from .gimbal import Gimbal
@@ -123,6 +122,10 @@ class App:
             "invert_tilt": self.inv_tilt.get(),
             "kp": self.kp.get(),
             "max_speed": self.max_speed.get(),
+            "smoothing": self.smoothing.get(),
+            "deadzone": self.deadzone.get(),
+            "lead": self.lead.get(),
+            "sharp_stop": self.sharp_stop.get(),
             "vcam_size": self.vcam_size.get(),
             "vcam_on": self.vcam_on.get(),
             "manual_speed": self.manual_speed.get(),
@@ -229,16 +232,40 @@ class App:
         for txt, val in (("Kapalı", "off"), ("Yüz / kafa", "face"), ("Vücut", "body")):
             ttk.Radiobutton(row, text=txt, value=val, variable=self.track_mode,
                             command=self._on_track_mode).pack(side="left", padx=(0, 8))
+        def slider(label, var, lo, hi, fmt):
+            row = ttk.Frame(t)
+            row.pack(fill="x", pady=2)
+            ttk.Label(row, text=label, width=11).pack(side="left")
+            val = ttk.Label(row, width=5)
+            val.pack(side="right")
+            sc = ttk.Scale(row, from_=lo, to=hi, variable=var,
+                           command=lambda v: val.configure(text=fmt(float(v))))
+            sc.pack(side="left", fill="x", expand=True, padx=4)
+            var.trace_add("write", lambda *a: val.configure(text=fmt(var.get())))
+            val.configure(text=fmt(var.get()))
+
+        self.max_speed = tk.DoubleVar(value=1.0)
+        self.kp = tk.DoubleVar(value=3.0)
+        self.smoothing = tk.DoubleVar(value=0.3)
+        self.deadzone = tk.DoubleVar(value=0.04)
+        self.lead = tk.DoubleVar(value=0.12)
+        slider("Hız (maks):", self.max_speed, 0.1, 1.0, lambda v: f"%{v * 100:.0f}")
+        slider("Tepki:", self.kp, 0.5, 8.0, lambda v: f"{v:.1f}")
+        slider("Yumuşak kalkış:", self.smoothing, 0.0, 0.9, lambda v: f"{v:.2f}")
+        slider("Ölü bölge:", self.deadzone, 0.0, 0.15, lambda v: f"%{v * 100:.0f}")
+        slider("Öngörü:", self.lead, 0.0, 0.4, lambda v: f"{v * 1000:.0f}ms")
         row = ttk.Frame(t)
-        row.pack(fill="x", pady=4)
-        ttk.Label(row, text="Tepki:").pack(side="left")
-        self.kp = tk.DoubleVar(value=2.2)
-        ttk.Scale(row, from_=0.5, to=5.0, variable=self.kp).pack(side="left", fill="x", expand=True, padx=4)
+        row.pack(fill="x", pady=(2, 0))
+        self.sharp_stop = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row, text="Keskin durma (hedef merkeze gelince anında dur)",
+                        variable=self.sharp_stop).pack(side="left")
         row = ttk.Frame(t)
-        row.pack(fill="x", pady=4)
-        ttk.Label(row, text="Maks. hız:").pack(side="left")
-        self.max_speed = tk.DoubleVar(value=0.6)
-        ttk.Scale(row, from_=0.1, to=1.0, variable=self.max_speed).pack(side="left", fill="x", expand=True, padx=4)
+        row.pack(fill="x", pady=(2, 0))
+        for name, vals in (("Yavaş", (0.4, 2.0, 0.5, 0.06, 0.05)),
+                           ("Normal", (0.8, 3.0, 0.3, 0.04, 0.12)),
+                           ("Hızlı", (1.0, 5.5, 0.1, 0.03, 0.2))):
+            ttk.Button(row, text=name, width=7,
+                       command=lambda v=vals: self._tracking_preset(*v)).pack(side="left", padx=(0, 4))
         row = ttk.Frame(t)
         row.pack(fill="x")
         self.inv_pan = tk.BooleanVar(value=False)
@@ -269,8 +296,12 @@ class App:
         s = self.settings
         self.inv_pan.set(s.get("invert_pan", False))
         self.inv_tilt.set(s.get("invert_tilt", False))
-        self.kp.set(s.get("kp", 2.2))
-        self.max_speed.set(s.get("max_speed", 0.6))
+        self.kp.set(s.get("kp", 3.0))
+        self.max_speed.set(s.get("max_speed", 1.0))
+        self.smoothing.set(s.get("smoothing", 0.3))
+        self.deadzone.set(s.get("deadzone", 0.04))
+        self.lead.set(s.get("lead", 0.12))
+        self.sharp_stop.set(s.get("sharp_stop", True))
         self.vcam_size.set(s.get("vcam_size", "1080p"))
         self.vcam_on.set(s.get("vcam_on", True))
         self.manual_speed.set(s.get("manual_speed", 0.4))
@@ -345,7 +376,15 @@ class App:
         tilt = (s if "up" in self.manual else 0) - (s if "down" in self.manual else 0)
         self.gimbal.set_velocity(pan=pan, tilt=tilt)
 
+    def _tracking_preset(self, speed, kp, smooth, dz, lead):
+        self.max_speed.set(speed)
+        self.kp.set(kp)
+        self.smoothing.set(smooth)
+        self.deadzone.set(dz)
+        self.lead.set(lead)
+
     def _on_track_mode(self):
+        self.follow.reset()
         self.tracker.mode = self.track_mode.get()
         if self.tracker.mode == "off" and not self.manual:
             self.gimbal.stop()
@@ -422,6 +461,10 @@ class App:
                     self.post(self.gimbal_status.set, f"Takip hatası: {e}")
                 self.follow.kp = self.kp.get()
                 self.follow.max_speed = self.max_speed.get()
+                self.follow.smoothing = self.smoothing.get()
+                self.follow.deadzone = self.deadzone.get()
+                self.follow.lead = self.lead.get()
+                self.follow.sharp_stop = self.sharp_stop.get()
                 self.follow.invert_pan = self.inv_pan.get()
                 self.follow.invert_tilt = self.inv_tilt.get()
                 pan, tilt = self.follow.update(point)

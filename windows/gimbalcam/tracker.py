@@ -57,54 +57,82 @@ class Tracker:
 
 
 class FollowController:
-    """Converts target position error into gimbal velocities."""
+    """Converts the target's position error into gimbal velocities.
+
+    speed       maximum gimbal speed (0..1 of joystick range)
+    response    proportional gain: how hard it reacts to a given error
+    smoothing   0 = instant acceleration, 0.9 = very soft start
+    sharp_stop  decelerate/stop instantly (no smoothing tail, no overshoot)
+    lead        look-ahead in seconds using the target's own motion (helps with fast movers)
+    """
 
     def __init__(self):
         self.target_x = 0.5
         self.target_y = 0.42
         self.deadzone = 0.04
-        self.kp = 2.2
-        self.kd = 0.25
-        self.max_speed = 0.6
+        self.kp = 3.0
+        self.max_speed = 1.0
+        self.smoothing = 0.3
+        self.sharp_stop = True
+        self.lead = 0.12
         self.invert_pan = False
         self.invert_tilt = False
-        self._prev = None
+        self._prev_err = None
         self._prev_t = 0.0
+        self._vel_est = (0.0, 0.0)
         self._out = (0.0, 0.0)
+        self._int = (0.0, 0.0)
         self._lost_since = None
+
+    def reset(self):
+        self._prev_err = None
+        self._vel_est = (0.0, 0.0)
+        self._out = (0.0, 0.0)
+        self._int = (0.0, 0.0)
+
+    def _axis(self, err, prev_out):
+        dz = self.deadzone
+        if abs(err) < dz:
+            raw = 0.0
+        else:
+            e = err - dz * (1 if err > 0 else -1)
+            raw = max(-self.max_speed, min(self.max_speed, self.kp * e))
+        decelerating = abs(raw) < abs(prev_out) or raw * prev_out < 0
+        if self.sharp_stop and decelerating:
+            return raw                               # stop / slow down immediately
+        a = 1.0 - max(0.0, min(0.95, self.smoothing))
+        return prev_out + a * (raw - prev_out)        # soft acceleration
 
     def update(self, point):
         now = time.monotonic()
         if point is None:
             if self._lost_since is None:
                 self._lost_since = now
-            if now - self._lost_since > 0.3:
+            if self.sharp_stop or now - self._lost_since > 0.3:
                 self._out = (0.0, 0.0)
+                self._int = (0.0, 0.0)
+                self._prev_err = None
             return self._out
         self._lost_since = None
 
         ex = point[0] - self.target_x
         ey = point[1] - self.target_y
-        dt = max(1e-3, now - self._prev_t) if self._prev else None
-        dx = (ex - self._prev[0]) / dt if dt else 0.0
-        dy = (ey - self._prev[1]) / dt if dt else 0.0
-        self._prev = (ex, ey)
+        if self._prev_err is not None:
+            dt = max(1e-3, now - self._prev_t)
+            vx = (ex - self._prev_err[0]) / dt
+            vy = (ey - self._prev_err[1]) / dt
+            self._vel_est = (0.6 * self._vel_est[0] + 0.4 * vx, 0.6 * self._vel_est[1] + 0.4 * vy)
+        self._prev_err = (ex, ey)
         self._prev_t = now
 
-        def axis(e, d):
-            if abs(e) < self.deadzone:
-                return 0.0
-            e = e - self.deadzone * (1 if e > 0 else -1)
-            v = self.kp * e + self.kd * d * 0.05
-            return max(-self.max_speed, min(self.max_speed, v))
+        # look ahead: where the target will be shortly
+        px = ex + self._vel_est[0] * self.lead
+        py = ey + self._vel_est[1] * self.lead
 
-        pan = axis(ex, dx)
-        tilt = -axis(ey, dy)  # subject above centre -> tilt up
-        if self.invert_pan:
-            pan = -pan
-        if self.invert_tilt:
-            tilt = -tilt
-        # light smoothing
-        a = 0.5
-        self._out = (a * pan + (1 - a) * self._out[0], a * tilt + (1 - a) * self._out[1])
+        ip = self._axis(px, self._int[0])   # internal state is in "error space"
+        it = self._axis(py, self._int[1])
+        self._int = (ip, it)
+        pan = -ip if self.invert_pan else ip
+        tilt = it if self.invert_tilt else -it  # subject above centre (ey<0) -> tilt up (+)
+        self._out = (pan, tilt)
         return self._out
