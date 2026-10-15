@@ -1,10 +1,14 @@
 """HTTPS + WebSocket server the iPhone's Safari connects to (after scanning the QR code).
 
-Phone -> PC WebSocket messages
-    text   JSON: hello / recording / zoom / rec_begin {name} / rec_end {name,size}
-    binary [0x01][flags][int64 ts µs][H.264 Annex-B]   live 720p preview
-    binary [0x03][bytes]                              recording file chunk (MP4)
-PC -> phone: text JSON commands {"cmd": "record"|"zoom"|"quality"|"keyframe"|"status", ...}
+Plain HTTPS only (iOS Safari does not apply a self-signed certificate exception to
+WebSockets, but it does to fetch()).
+
+Phone -> PC   POST /up    body = repeated [len u32 BE][message]
+    message [0x01][flags][int64 ts µs][H.264 Annex-B]   live 720p preview (flags bit1 = VP8)
+    message [0x02][UTF-8 JSON]                         hello / recording / zoom / rec_begin / rec_end / ping
+    message [0x03][bytes]                              recording file chunk (MP4)
+PC -> phone   GET /poll   long-poll, returns a JSON list of commands
+    {"cmd": "record"|"zoom"|"quality"|"keyframe"|"status", ...}
 """
 import asyncio
 import datetime
@@ -15,10 +19,11 @@ import secrets
 import socket
 import ssl
 import threading
+import time
 from pathlib import Path
 
 import av
-from aiohttp import WSMsgType, web
+from aiohttp import web
 
 APP_DIR = Path(os.environ.get("APPDATA", Path.home())) / "GimbalCam"
 RECORDINGS_DIR = Path.home() / "Videos" / "GimbalCam"
@@ -101,11 +106,15 @@ class PhoneServer:
         self.on_file = on_file
         self.on_connection = on_connection
         self.loop = asyncio.new_event_loop()
-        self.ws = None
+        self.sid = None
+        self.last_seen = 0.0
+        self._connected = False
+        self.cmd_queue = None
         self.codec = None
         self.ips = lan_ips()
         self.port = PORT
         self.stats_bytes = 0
+        self.latency_ms = None
         self.rec_fh = None
         self.rec_info = {}
 
@@ -125,11 +134,14 @@ class PhoneServer:
 
             app = web.Application(client_max_size=64 * 1024 * 1024)
             app.router.add_get("/", self._index)
-            app.router.add_get("/ws", self._ws)
+            app.router.add_post("/up", self._up)
+            app.router.add_get("/poll", self._poll)
             runner = web.AppRunner(app, access_log=None)
             self.loop.run_until_complete(runner.setup())
             site = web.TCPSite(runner, "0.0.0.0", self.port, ssl_context=sslctx)
             self.loop.run_until_complete(site.start())
+            self.cmd_queue = asyncio.Queue()
+            self.loop.create_task(self._watchdog())
             self.on_status("QR kodu iPhone Kamera ile tarat")
         except OSError as e:
             self.on_status(f"Sunucu başlatılamadı (port {self.port}): {e}")
@@ -139,33 +151,69 @@ class PhoneServer:
     async def _index(self, request):
         return web.FileResponse(WEB_DIR / "phone.html", headers={"Cache-Control": "no-store"})
 
-    async def _ws(self, request):
-        if not secrets.compare_digest(request.query.get("t", ""), self.token):
-            return web.Response(status=403, text="Geçersiz QR. Bilgisayardaki QR kodu yeniden tarat.")
-        ws = web.WebSocketResponse(max_msg_size=64 * 1024 * 1024, heartbeat=10)
-        await ws.prepare(request)
+    def _authorized(self, request):
+        return secrets.compare_digest(request.query.get("t", ""), self.token)
 
-        if self.ws is not None and not self.ws.closed:
-            await self.ws.close()
-        self.ws = ws
-        self.codec = None
-        self.on_connection(True)
-        self.on_status(f"Telefon bağlı ({request.remote})")
+    def _touch(self, sid, remote):
+        """Mark the phone as alive; detect a new page session."""
+        self.last_seen = time.monotonic()
+        if sid != self.sid:
+            self.sid = sid
+            self.codec = None
+            self.cmd_queue = asyncio.Queue()
+        if not self._connected:
+            self._connected = True
+            self.on_connection(True)
+            self.on_status(f"Telefon bağlı ({remote})")
+
+    async def _up(self, request):
+        """Phone -> PC: body is a batch of [len u32 BE][message] items."""
+        if not self._authorized(request):
+            return web.Response(status=403, text="Geçersiz QR")
+        sid = request.query.get("sid", "")
+        body = await request.read()
+        self._touch(sid, request.remote)
+        mv = memoryview(body)
+        p = 0
+        while p + 4 <= len(body):
+            n = int.from_bytes(mv[p:p + 4], "big")
+            p += 4
+            msg = mv[p:p + n]
+            p += n
+            if not len(msg):
+                continue
+            if msg[0] == 2:
+                try:
+                    self._on_text(json.loads(bytes(msg[1:]).decode("utf-8")))
+                except ValueError:
+                    pass
+            else:
+                self._on_binary(msg)
+        return web.Response(text="ok", headers={"Cache-Control": "no-store"})
+
+    async def _poll(self, request):
+        """PC -> phone: long-poll for commands."""
+        if not self._authorized(request):
+            return web.Response(status=403, text="Geçersiz QR")
+        sid = request.query.get("sid", "")
+        self._touch(sid, request.remote)
+        q = self.cmd_queue
+        cmds = []
         try:
-            async for msg in ws:
-                if msg.type == WSMsgType.BINARY:
-                    self._on_binary(msg.data)
-                elif msg.type == WSMsgType.TEXT:
-                    try:
-                        self._on_text(json.loads(msg.data))
-                    except ValueError:
-                        pass
-        finally:
-            if self.ws is ws:
-                self.ws = None
+            cmds.append(await asyncio.wait_for(q.get(), timeout=15))
+            while not q.empty():
+                cmds.append(q.get_nowait())
+        except asyncio.TimeoutError:
+            pass
+        return web.json_response(cmds, headers={"Cache-Control": "no-store"})
+
+    async def _watchdog(self):
+        while True:
+            await asyncio.sleep(1)
+            if self._connected and time.monotonic() - self.last_seen > 4:
+                self._connected = False
                 self.on_connection(False)
                 self.on_status("Telefon bağlantısı koptu — sayfa açıksa kendiliğinden bağlanır")
-        return ws
 
     def _on_binary(self, data: bytes):
         kind = data[0]
@@ -174,13 +222,22 @@ class PhoneServer:
             codec_name = "vp8" if data[1] & 2 else "h264"
             if self.codec is None or self.codec.name != codec_name:
                 self.codec = av.CodecContext.create(codec_name, "r")
+                try:
+                    self.codec.thread_count = 1          # no frame-threading delay
+                    self.codec.options = {"flags": "low_delay"}
+                except Exception:  # noqa: BLE001
+                    pass
+            sent_ms = int.from_bytes(bytes(data[2:10]), "big", signed=True)
             try:
-                for frame in self.codec.decode(av.Packet(data[10:])):
+                for frame in self.codec.decode(av.Packet(bytes(data[10:]))):
+                    lat = time.time() * 1000 - sent_ms
+                    if 0 < lat < 10000:
+                        self.latency_ms = lat if self.latency_ms is None else self.latency_ms * 0.9 + lat * 0.1
                     self.on_frame(frame)
             except av.error.InvalidDataError:
                 self.send_json({"cmd": "keyframe"})
         elif kind == 3 and self.rec_fh:
-            self.rec_fh.write(memoryview(data)[1:])
+            self.rec_fh.write(data[1:])
             self.rec_info["received"] += len(data) - 1
             self.on_file("progress", dict(self.rec_info))
 
@@ -212,15 +269,15 @@ class PhoneServer:
         self.rec_fh = None
 
     def send_json(self, obj):
-        ws = self.ws
-        if ws is None or ws.closed:
+        q = self.cmd_queue
+        if q is None or not self._connected:
             return False
-        asyncio.run_coroutine_threadsafe(ws.send_str(json.dumps(obj)), self.loop)
+        self.loop.call_soon_threadsafe(q.put_nowait, obj)
         return True
 
     @property
     def connected(self):
-        return self.ws is not None and not self.ws.closed
+        return self._connected
 
 
 def new_token():

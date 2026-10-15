@@ -479,7 +479,8 @@ class App:
         self._mbps = getattr(self, "_mbps", 0.0) * 0.95 + mbps * (1000 / 30) * 0.05
         self.info_line.set(
             f"{'Telefon bağlı (Wi-Fi)' if r.connected else 'Telefon bağlı değil'}  ·  "
-            f"işlenen {self.proc_fps:.0f} fps  ·  {self._mbps:.1f} Mbps")
+            f"işlenen {self.proc_fps:.0f} fps  ·  {self._mbps:.1f} Mbps  ·  "
+            f"gecikme {('~%d ms' % r.latency_ms) if r.latency_ms is not None else '—'}")
         self.root.after(30, self._ui_tick)
 
     def _on_close(self):
