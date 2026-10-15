@@ -21,7 +21,9 @@ iPhone 15 Pro Max'i Windows'ta yüksek kaliteli webcam olarak kullanmak ve Zhiyu
 
 1. [Releases → latest](../../releases/tag/latest) sayfasından `GimbalCam-windows.zip` indir, çıkar, `GimbalCam.exe` çalıştır. Windows Güvenlik Duvarı sorarsa **Özel ağlar**a izin ver.
 2. Ekrandaki QR kodu iPhone Kamera ile tarat. Safari ilk seferde “bağlantı gizli değil” der: *Ayrıntıları Göster → bu web sitesini ziyaret et*.
-3. **Kamerayı başlat** → görüntü bilgisayarda. Gimbale bağlan, takibi aç.
+3. **Kamerayı başlat** → görüntü bilgisayardaki panelde. Gimbale bağlan, takibi aç.
+   - Kısayollar: ok tuşları = gimbal, **Esc = DURDUR**, R = kayıt, P = duraklat, 1/2/3 = takip modu.
+   - Dil: Türkçe, English, Español, Русский, 中文, العربية (sağ üstten).
 4. Sanal webcam için [OBS Studio](https://obsproject.com) kurulu olmalı; Zoom/Teams'te “OBS Virtual Camera” seç.
 
 ## iOS derleme
