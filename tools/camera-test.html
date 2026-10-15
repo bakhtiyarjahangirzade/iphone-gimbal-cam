@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kamera Testi</title>
+<style>
+:root{--bg:#f6f7f9;--fg:#1b1f24;--mut:#5d6672;--line:#dde1e6;--acc:#2563eb;--ok:#15803d;--err:#b91c1c}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--fg:#e8ebef;--mut:#9aa3ad;--line:#2c323a;--acc:#60a5fa;--ok:#4ade80;--err:#f87171}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:21px;margin:0 0 6px}
+p{color:var(--mut);margin:0 0 12px}
+button{font:inherit;font-weight:600;background:var(--acc);color:#fff;border:0;border-radius:10px;padding:12px 16px;width:100%;margin:6px 0}
+button.sec{background:transparent;color:var(--acc);border:1px solid var(--line)}
+video{width:100%;background:#000;border-radius:10px;margin:8px 0;aspect-ratio:16/9}
+pre{white-space:pre-wrap;word-break:break-word;font:12.5px/1.5 ui-monospace,Menlo,monospace;background:transparent;border:1px solid var(--line);border-radius:10px;padding:10px}
+.ok{color:var(--ok)}.err{color:var(--err)}
+</style>
+</head>
+<body>
+<main>
+<h1>iPhone Safari kamera testi</h1>
+<p>Uygulama yüklemeden ne kadar kalite alabileceğimizi ölçer. Yaklaşık 30 saniye sürer. “İzin ver” dediğinde kamera açılır.</p>
+<button id="run">Testi başlat</button>
+<video id="v" playsinline muted autoplay></video>
+<pre id="out">Hazır.</pre>
+<button class="sec" id="copy">Sonucu kopyala</button>
+</main>
+<script>
+const out = document.getElementById("out"), v = document.getElementById("v");
+const lines = [];
+const log = s => { lines.push(s); out.textContent = lines.join("\n"); };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function measureFps(track, ms = 2000) {
+  if (!("requestVideoFrameCallback" in HTMLVideoElement.prototype)) return null;
+  let n = 0, done = false;
+  const cb = () => { n++; if (!done) v.requestVideoFrameCallback(cb); };
+  v.requestVideoFrameCallback(cb);
+  await sleep(ms); done = true;
+  return (n * 1000 / ms).toFixed(1);
+}
+
+async function tryMode(label, w, h, fps) {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { exact: "environment" }, width: { ideal: w }, height: { ideal: h }, frameRate: { ideal: fps } }
+    });
+  } catch (e) { log(`${label}: HATA ${e.name}`); return null; }
+  v.srcObject = stream;
+  await v.play().catch(()=>{});
+  await sleep(800);
+  const t = stream.getVideoTracks()[0];
+  const s = t.getSettings();
+  const real = await measureFps(t);
+  log(`${label}: verilen ${s.width}x${s.height} @ ${s.frameRate ?? "?"} fps, ölçülen ${real ?? "?"} fps`);
+  return stream;
+}
+
+async function testRecorder(stream, label) {
+  if (!window.MediaRecorder) { log("MediaRecorder: YOK"); return; }
+  const types = ["video/mp4;codecs=hvc1", "video/mp4;codecs=avc1", "video/mp4"];
+  const type = types.find(t => MediaRecorder.isTypeSupported(t));
+  log(`MediaRecorder türleri: ${types.map(t => t + "=" + (MediaRecorder.isTypeSupported(t) ? "evet" : "hayır")).join(", ")}`);
+  if (!type) return;
+  try {
+    const rec = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 60_000_000 });
+    const chunks = [];
+    rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    rec.start(500);
+    await sleep(4000);
+    rec.stop();
+    await new Promise(r => rec.onstop = r);
+    const bytes = chunks.reduce((a, c) => a + c.size, 0);
+    log(`${label} kayıt (${type}): 4 sn = ${(bytes/1e6).toFixed(1)} MB → ~${(bytes*8/4/1e6).toFixed(0)} Mbps`);
+  } catch (e) { log(`${label} kayıt HATA: ${e.message}`); }
+}
+
+async function testEncoder() {
+  if (!window.VideoEncoder) { log("WebCodecs VideoEncoder: YOK"); return; }
+  for (const [w, h, f] of [[1280, 720, 60], [1920, 1080, 60]]) {
+    try {
+      const r = await VideoEncoder.isConfigSupported({ codec: "avc1.640028", width: w, height: h, framerate: f, bitrate: 8e6, latencyMode: "realtime", hardwareAcceleration: "prefer-hardware" });
+      log(`WebCodecs H.264 ${w}x${h}@${f}: ${r.supported ? "evet" : "hayır"}`);
+    } catch (e) { log(`WebCodecs ${w}x${h}: HATA ${e.message}`); }
+  }
+}
+
+document.getElementById("run").onclick = async () => {
+  lines.length = 0;
+  log(navigator.userAgent);
+  log(`Güvenli bağlam (https): ${isSecureContext}`);
+  try {
+    const devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    // labels appear only after permission; first ask briefly
+    let s = await tryMode("İzin", 1280, 720, 30);
+    s?.getTracks().forEach(t => t.stop());
+    const devs2 = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    log(`Kameralar: ${devs2.map(d => d.label || "?").join(" | ")}`);
+  } catch (e) { log("enumerateDevices HATA " + e.message); }
+
+  for (const [label, w, h, f] of [["4K60", 3840, 2160, 60], ["4K30", 3840, 2160, 30], ["1080p60", 1920, 1080, 60], ["720p60", 1280, 720, 60]]) {
+    const s = await tryMode(label, w, h, f);
+    if (s && (label === "4K60" || label === "4K30")) {
+      const caps = s.getVideoTracks()[0].getCapabilities?.();
+      if (caps && label === "4K60") log(`Yetenekler: genişlik ≤${caps.width?.max}, yükseklik ≤${caps.height?.max}, fps ≤${caps.frameRate?.max}, zoom ${caps.zoom ? caps.zoom.min + "-" + caps.zoom.max : "yok"}, odak ${caps.focusMode ? caps.focusMode.join("/") : "yok"}`);
+      await testRecorder(s, label);
+    }
+    s?.getTracks().forEach(t => t.stop());
+  }
+  await testEncoder();
+  log("BİTTİ ✔");
+};
+
+document.getElementById("copy").onclick = async () => {
+  try { await navigator.clipboard.writeText(out.textContent); document.getElementById("copy").textContent = "Kopyalandı ✔"; }
+  catch { document.getElementById("copy").textContent = "Metni elle seçip kopyala"; }
+};
+</script>
+</body>
+</html>
