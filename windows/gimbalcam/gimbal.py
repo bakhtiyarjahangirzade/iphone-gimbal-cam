@@ -42,6 +42,7 @@ class Gimbal:
         self.vel = {AXIS_PAN: 0.0, AXIS_TILT: 0.0, AXIS_ROLL: 0.0}
         self._idle = {AXIS_PAN: 99, AXIS_TILT: 99, AXIS_ROLL: 99}
         self._task = None
+        self._connecting = False
 
     # ---------- public API ----------
 
@@ -89,8 +90,15 @@ class Gimbal:
             self.on_status("write_error", str(e))
 
     async def _connect(self):
-        if self.connected:
+        if self.connected or self._connecting:
             return
+        self._connecting = True
+        try:
+            await self._connect_inner()
+        finally:
+            self._connecting = False
+
+    async def _connect_inner(self):
         self.on_status("searching", "")
 
         def match(d, adv):

@@ -136,3 +136,40 @@ class FollowController:
         tilt = it if self.invert_tilt else -it  # subject above centre (ey<0) -> tilt up (+)
         self._out = (pan, tilt)
         return self._out
+
+
+class AutoFramer:
+    """Digital 'Center Stage': a smoothly moving crop window that keeps the face framed.
+
+    update() returns (cx, cy, size) normalized: crop centre and crop size as a fraction
+    of the full frame (size = 1/zoom). The face is placed in the upper third.
+    """
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.cx, self.cy, self.size = 0.5, 0.5, 1.0
+        self._lost_since = None
+
+    def update(self, point, zoom):
+        now = time.monotonic()
+        zoom = max(1.0, min(3.0, zoom))
+        if point is not None:
+            self._lost_since = None
+            size = 1.0 / zoom
+            tx, ty = point[0], point[1] + size * 0.17      # face sits a bit above centre
+        else:
+            if self._lost_since is None:
+                self._lost_since = now
+            if now - self._lost_since < 2.0:               # brief loss: hold the shot
+                return self.cx, self.cy, self.size
+            size, tx, ty = 1.0, 0.5, 0.5                   # gone: ease back to the full view
+        a = 0.12                                           # cinematic smoothing
+        self.size += (size - self.size) * a
+        self.cx += (tx - self.cx) * a
+        self.cy += (ty - self.cy) * a
+        half = self.size / 2
+        self.cx = min(max(self.cx, half), 1 - half)
+        self.cy = min(max(self.cy, half), 1 - half)
+        return self.cx, self.cy, self.size
