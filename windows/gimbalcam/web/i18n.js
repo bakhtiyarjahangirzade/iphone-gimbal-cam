@@ -57,70 +57,10 @@ g_idle:"غير متصل",g_searching:"جارٍ البحث…",g_not_found:"غي�
 p_starting:"جارٍ البدء…",p_ready:"في الانتظار",p_phone_connected:"متصل",p_phone_lost:"منقطع",p_server_error:"خطأ في الخادم"},
 };
 
-// ---- page tabs + 3D scan page ----
-Object.assign(window.I18N.tr, {tab_camera:"Kamera",tab_scan:"3D Tarama",scan_phone:"GimbalScan",
-scan_qr_title:"GimbalScan'i bağla",scan_step1:"iPhone'a GimbalScan uygulamasını kur (bir kez, Sideloadly ile)",scan_step2:"Uygulamayı aç ve bu QR kodu okut",scan_step3:"Taramayı başlat — model burada canlı oluşur",
-mode_room:"Oda planı",mode_mesh:"Detaylı mesh",scan_start:"Taramayı başlat",scan_finish:"Bitir",scan_processing:"Telefon modeli hazırlıyor…",scan_card:"Tarama",
-auto_title:"Otomatik 360° tarama",auto_start:"360° başlat",auto_stop:"Durdur",auto_speed:"Dönüş hızı",auto_levels:"Seviyeler",auto_hint:"Gimbal telefonu her seviyede tam tur döndürür. Açı, telefonun LiDAR konumundan okunur.",
-sw_idle:"Hazır",sw_tilt:"Açı ayarlanıyor → {level}°",sw_pan:"Dönüyor · seviye {n}/{m} · %{pct}",sw_done:"Tamamlandı ✔",sw_no_pose:"Telefondan konum gelmiyor — tarama açık mı?",sw_no_motion:"Gimbal dönmüyor — bağlı mı?",sw_stopped:"Durduruldu",sw_no_gimbal:"Önce gimbale bağlan",
-export_title:"Dışa aktar",export_btn:"Şimdi kaydet",export_open:"Klasörü aç",export_saved:"{n} dosya kaydedildi",
-view_3d:"3D",view_plan:"Plan",layer_room:"Oda",layer_mesh:"Mesh",wireframe:"Tel kafes",fit:"Sığdır",clear:"Temizle",
-stats_title:"Ölçümler",st_area:"Taban alanı",st_size:"Oda boyutu",st_walls:"Duvar",st_doors:"Kapı",st_windows:"Pencere",st_objects:"Eşya",st_tris:"Mesh üçgeni",
-in_move_close:"Duvara yaklaş",in_move_away:"Duvardan uzaklaş",in_slow_down:"Daha yavaş",in_more_light:"Daha fazla ışık lazım",in_low_texture:"Desensiz yüzey — açıyı değiştir",track_limited:"Konum takibi zayıf — yavaşla",
-cat_storage:"Dolap",cat_refrigerator:"Buzdolabı",cat_stove:"Ocak",cat_bed:"Yatak",cat_sink:"Lavabo",cat_washerDryer:"Çamaşır makinesi",cat_toilet:"Klozet",cat_bathtub:"Küvet",cat_oven:"Fırın",cat_dishwasher:"Bulaşık mak.",cat_table:"Masa",cat_sofa:"Kanepe",cat_chair:"Sandalye",cat_fireplace:"Şömine",cat_television:"Televizyon",cat_stairs:"Merdiven",
-k_view:"görünüm",k_auto:"360° tarama"});
-Object.assign(window.I18N.en, {tab_camera:"Camera",tab_scan:"3D Scan",scan_phone:"GimbalScan",
-scan_qr_title:"Connect GimbalScan",scan_step1:"Install the GimbalScan app on the iPhone (once, with Sideloadly)",scan_step2:"Open the app and scan this QR code",scan_step3:"Start scanning — the model builds live here",
-mode_room:"Room plan",mode_mesh:"Detailed mesh",scan_start:"Start scan",scan_finish:"Finish",scan_processing:"Phone is building the model…",scan_card:"Scan",
-auto_title:"Auto 360° scan",auto_start:"Start 360°",auto_stop:"Stop",auto_speed:"Rotation speed",auto_levels:"Levels",auto_hint:"The gimbal turns the phone a full circle at each level. The angle is read from the phone's LiDAR pose.",
-sw_idle:"Ready",sw_tilt:"Setting angle → {level}°",sw_pan:"Rotating · level {n}/{m} · {pct}%",sw_done:"Done ✔",sw_no_pose:"No pose from the phone — is it scanning?",sw_no_motion:"Gimbal isn't turning — is it connected?",sw_stopped:"Stopped",sw_no_gimbal:"Connect the gimbal first",
-export_title:"Export",export_btn:"Save now",export_open:"Open folder",export_saved:"{n} files saved",
-view_3d:"3D",view_plan:"Plan",layer_room:"Room",layer_mesh:"Mesh",wireframe:"Wireframe",fit:"Fit",clear:"Clear",
-stats_title:"Measurements",st_area:"Floor area",st_size:"Room size",st_walls:"Walls",st_doors:"Doors",st_windows:"Windows",st_objects:"Objects",st_tris:"Mesh triangles",
-in_move_close:"Move closer to the wall",in_move_away:"Move away from the wall",in_slow_down:"Slow down",in_more_light:"More light needed",in_low_texture:"Featureless surface — change angle",track_limited:"Tracking limited — slow down",
-cat_storage:"Storage",cat_refrigerator:"Fridge",cat_stove:"Stove",cat_bed:"Bed",cat_sink:"Sink",cat_washerDryer:"Washer",cat_toilet:"Toilet",cat_bathtub:"Bathtub",cat_oven:"Oven",cat_dishwasher:"Dishwasher",cat_table:"Table",cat_sofa:"Sofa",cat_chair:"Chair",cat_fireplace:"Fireplace",cat_television:"TV",cat_stairs:"Stairs",
-k_view:"view",k_auto:"360° scan"});
-Object.assign(window.I18N.es, {tab_camera:"Cámara",tab_scan:"Escaneo 3D",scan_phone:"GimbalScan",
-scan_qr_title:"Conecta GimbalScan",scan_step1:"Instala la app GimbalScan en el iPhone (una vez, con Sideloadly)",scan_step2:"Abre la app y escanea este código QR",scan_step3:"Inicia el escaneo: el modelo se crea aquí en vivo",
-mode_room:"Plano",mode_mesh:"Malla detallada",scan_start:"Iniciar escaneo",scan_finish:"Terminar",scan_processing:"El teléfono está creando el modelo…",scan_card:"Escaneo",
-auto_title:"Escaneo automático 360°",auto_start:"Iniciar 360°",auto_stop:"Detener",auto_speed:"Velocidad de giro",auto_levels:"Niveles",auto_hint:"El gimbal gira el teléfono una vuelta completa en cada nivel. El ángulo se lee de la pose LiDAR del teléfono.",
-sw_idle:"Listo",sw_tilt:"Ajustando ángulo → {level}°",sw_pan:"Girando · nivel {n}/{m} · {pct}%",sw_done:"Completado ✔",sw_no_pose:"Sin pose del teléfono: ¿está escaneando?",sw_no_motion:"El gimbal no gira: ¿está conectado?",sw_stopped:"Detenido",sw_no_gimbal:"Conecta primero el gimbal",
-export_title:"Exportar",export_btn:"Guardar ahora",export_open:"Abrir carpeta",export_saved:"{n} archivos guardados",
-view_3d:"3D",view_plan:"Plano",layer_room:"Habitación",layer_mesh:"Malla",wireframe:"Alambre",fit:"Ajustar",clear:"Borrar",
-stats_title:"Medidas",st_area:"Superficie",st_size:"Tamaño",st_walls:"Paredes",st_doors:"Puertas",st_windows:"Ventanas",st_objects:"Objetos",st_tris:"Triángulos",
-in_move_close:"Acércate a la pared",in_move_away:"Aléjate de la pared",in_slow_down:"Más despacio",in_more_light:"Se necesita más luz",in_low_texture:"Superficie lisa: cambia el ángulo",track_limited:"Seguimiento limitado: más despacio",
-cat_storage:"Armario",cat_refrigerator:"Nevera",cat_stove:"Cocina",cat_bed:"Cama",cat_sink:"Fregadero",cat_washerDryer:"Lavadora",cat_toilet:"Inodoro",cat_bathtub:"Bañera",cat_oven:"Horno",cat_dishwasher:"Lavavajillas",cat_table:"Mesa",cat_sofa:"Sofá",cat_chair:"Silla",cat_fireplace:"Chimenea",cat_television:"TV",cat_stairs:"Escaleras",
-k_view:"vista",k_auto:"escaneo 360°"});
-Object.assign(window.I18N.ru, {tab_camera:"Камера",tab_scan:"3D-скан",scan_phone:"GimbalScan",
-scan_qr_title:"Подключите GimbalScan",scan_step1:"Установите приложение GimbalScan на iPhone (один раз, через Sideloadly)",scan_step2:"Откройте приложение и отсканируйте этот QR-код",scan_step3:"Начните сканирование — модель строится здесь в реальном времени",
-mode_room:"План комнаты",mode_mesh:"Детальная сетка",scan_start:"Начать",scan_finish:"Завершить",scan_processing:"Телефон строит модель…",scan_card:"Сканирование",
-auto_title:"Авто-скан 360°",auto_start:"Запустить 360°",auto_stop:"Стоп",auto_speed:"Скорость поворота",auto_levels:"Уровни",auto_hint:"Стабилизатор поворачивает телефон на полный круг на каждом уровне. Угол берётся из LiDAR-позиции телефона.",
-sw_idle:"Готово",sw_tilt:"Установка угла → {level}°",sw_pan:"Поворот · уровень {n}/{m} · {pct}%",sw_done:"Готово ✔",sw_no_pose:"Нет позиции от телефона — идёт ли скан?",sw_no_motion:"Стабилизатор не вращается — подключён?",sw_stopped:"Остановлено",sw_no_gimbal:"Сначала подключите стабилизатор",
-export_title:"Экспорт",export_btn:"Сохранить",export_open:"Открыть папку",export_saved:"Сохранено файлов: {n}",
-view_3d:"3D",view_plan:"План",layer_room:"Комната",layer_mesh:"Сетка",wireframe:"Каркас",fit:"Вписать",clear:"Очистить",
-stats_title:"Размеры",st_area:"Площадь пола",st_size:"Размер комнаты",st_walls:"Стены",st_doors:"Двери",st_windows:"Окна",st_objects:"Объекты",st_tris:"Треугольники",
-in_move_close:"Подойдите ближе к стене",in_move_away:"Отойдите от стены",in_slow_down:"Медленнее",in_more_light:"Нужно больше света",in_low_texture:"Однородная поверхность — смените угол",track_limited:"Слежение ограничено — медленнее",
-cat_storage:"Шкаф",cat_refrigerator:"Холодильник",cat_stove:"Плита",cat_bed:"Кровать",cat_sink:"Раковина",cat_washerDryer:"Стиральная машина",cat_toilet:"Унитаз",cat_bathtub:"Ванна",cat_oven:"Духовка",cat_dishwasher:"Посудомойка",cat_table:"Стол",cat_sofa:"Диван",cat_chair:"Стул",cat_fireplace:"Камин",cat_television:"Телевизор",cat_stairs:"Лестница",
-k_view:"вид",k_auto:"скан 360°"});
-Object.assign(window.I18N.zh, {tab_camera:"相机",tab_scan:"3D 扫描",scan_phone:"GimbalScan",
-scan_qr_title:"连接 GimbalScan",scan_step1:"在 iPhone 上安装 GimbalScan 应用（仅需一次，使用 Sideloadly）",scan_step2:"打开应用并扫描此二维码",scan_step3:"开始扫描——模型会在这里实时生成",
-mode_room:"房间平面",mode_mesh:"精细网格",scan_start:"开始扫描",scan_finish:"完成",scan_processing:"手机正在生成模型…",scan_card:"扫描",
-auto_title:"自动 360° 扫描",auto_start:"开始 360°",auto_stop:"停止",auto_speed:"旋转速度",auto_levels:"层级",auto_hint:"云台会在每个俯仰层级让手机旋转一整圈。角度来自手机的 LiDAR 位姿。",
-sw_idle:"就绪",sw_tilt:"调整角度 → {level}°",sw_pan:"旋转中 · 第 {n}/{m} 层 · {pct}%",sw_done:"完成 ✔",sw_no_pose:"未收到手机位姿——是否正在扫描？",sw_no_motion:"云台没有转动——是否已连接？",sw_stopped:"已停止",sw_no_gimbal:"请先连接云台",
-export_title:"导出",export_btn:"立即保存",export_open:"打开文件夹",export_saved:"已保存 {n} 个文件",
-view_3d:"3D",view_plan:"平面",layer_room:"房间",layer_mesh:"网格",wireframe:"线框",fit:"适应",clear:"清除",
-stats_title:"测量",st_area:"地面面积",st_size:"房间尺寸",st_walls:"墙",st_doors:"门",st_windows:"窗",st_objects:"物体",st_tris:"网格三角形",
-in_move_close:"靠近墙壁",in_move_away:"远离墙壁",in_slow_down:"放慢速度",in_more_light:"需要更多光线",in_low_texture:"表面缺少纹理——换个角度",track_limited:"跟踪受限——放慢速度",
-cat_storage:"柜子",cat_refrigerator:"冰箱",cat_stove:"灶台",cat_bed:"床",cat_sink:"水槽",cat_washerDryer:"洗衣机",cat_toilet:"马桶",cat_bathtub:"浴缸",cat_oven:"烤箱",cat_dishwasher:"洗碗机",cat_table:"桌子",cat_sofa:"沙发",cat_chair:"椅子",cat_fireplace:"壁炉",cat_television:"电视",cat_stairs:"楼梯",
-k_view:"视图",k_auto:"360° 扫描"});
-Object.assign(window.I18N.ar, {tab_camera:"الكاميرا",tab_scan:"مسح ثلاثي الأبعاد",scan_phone:"GimbalScan",
-scan_qr_title:"وصّل GimbalScan",scan_step1:"ثبّت تطبيق GimbalScan على iPhone (مرة واحدة عبر Sideloadly)",scan_step2:"افتح التطبيق وامسح رمز QR هذا",scan_step3:"ابدأ المسح — يُبنى النموذج هنا مباشرةً",
-mode_room:"مخطط الغرفة",mode_mesh:"شبكة مفصّلة",scan_start:"بدء المسح",scan_finish:"إنهاء",scan_processing:"الهاتف يُنشئ النموذج…",scan_card:"المسح",
-auto_title:"مسح تلقائي 360°",auto_start:"بدء 360°",auto_stop:"إيقاف",auto_speed:"سرعة الدوران",auto_levels:"المستويات",auto_hint:"يدير المثبّت الهاتف دورة كاملة عند كل مستوى. تُقرأ الزاوية من وضعية LiDAR للهاتف.",
-sw_idle:"جاهز",sw_tilt:"ضبط الزاوية ← {level}°",sw_pan:"يدور · المستوى {n}/{m} · {pct}%",sw_done:"اكتمل ✔",sw_no_pose:"لا توجد وضعية من الهاتف — هل المسح يعمل؟",sw_no_motion:"المثبّت لا يدور — هل هو متصل؟",sw_stopped:"متوقف",sw_no_gimbal:"وصّل المثبّت أولًا",
-export_title:"تصدير",export_btn:"حفظ الآن",export_open:"فتح المجلد",export_saved:"تم حفظ {n} ملفات",
-view_3d:"3D",view_plan:"مخطط",layer_room:"الغرفة",layer_mesh:"الشبكة",wireframe:"إطار سلكي",fit:"ملاءمة",clear:"مسح",
-stats_title:"القياسات",st_area:"مساحة الأرضية",st_size:"حجم الغرفة",st_walls:"الجدران",st_doors:"الأبواب",st_windows:"النوافذ",st_objects:"الأثاث",st_tris:"مثلثات الشبكة",
-in_move_close:"اقترب من الجدار",in_move_away:"ابتعد عن الجدار",in_slow_down:"أبطئ",in_more_light:"يلزم ضوء أكثر",in_low_texture:"سطح بلا نقوش — غيّر الزاوية",track_limited:"التتبع محدود — أبطئ",
-cat_storage:"خزانة",cat_refrigerator:"ثلاجة",cat_stove:"موقد",cat_bed:"سرير",cat_sink:"حوض",cat_washerDryer:"غسالة",cat_toilet:"مرحاض",cat_bathtub:"حوض استحمام",cat_oven:"فرن",cat_dishwasher:"غسالة صحون",cat_table:"طاولة",cat_sofa:"أريكة",cat_chair:"كرسي",cat_fireplace:"مدفأة",cat_television:"تلفاز",cat_stairs:"درج",
-k_view:"العرض",k_auto:"مسح 360°"});
+// ---- webcam features ----
+Object.assign(window.I18N.tr, {"stream_q": "Görüntü", "mirror": "Ayna görüntü", "framing": "Akıllı kadraj", "framing_hint": "Yüzü dijital zoom ile otomatik kadrajda tutar", "framing_zoom": "Yakınlık", "gestures": "El hareketleri", "gestures_hint": "Avuç içi 1 sn: takibi aç/kapat · Yumruk 1 sn: durdur", "gimbal_auto": "Otomatik bağlan", "ev_track_on": "✋ Takip açıldı", "ev_track_off": "✋ Takip kapandı", "ev_stop": "✊ Durduruldu", "webcam_card": "Webcam"});
+Object.assign(window.I18N.en, {"stream_q": "Video", "mirror": "Mirror", "framing": "Smart framing", "framing_hint": "Keeps your face framed with digital zoom", "framing_zoom": "Closeness", "gestures": "Hand gestures", "gestures_hint": "Open palm 1 s: tracking on/off · Fist 1 s: stop", "gimbal_auto": "Auto-connect", "ev_track_on": "✋ Tracking on", "ev_track_off": "✋ Tracking off", "ev_stop": "✊ Stopped", "webcam_card": "Webcam"});
+Object.assign(window.I18N.es, {"stream_q": "Vídeo", "mirror": "Espejo", "framing": "Encuadre inteligente", "framing_hint": "Mantiene tu cara encuadrada con zoom digital", "framing_zoom": "Cercanía", "gestures": "Gestos con la mano", "gestures_hint": "Palma abierta 1 s: seguimiento sí/no · Puño 1 s: detener", "gimbal_auto": "Conectar automáticamente", "ev_track_on": "✋ Seguimiento activado", "ev_track_off": "✋ Seguimiento desactivado", "ev_stop": "✊ Detenido", "webcam_card": "Webcam"});
+Object.assign(window.I18N.ru, {"stream_q": "Видео", "mirror": "Зеркально", "framing": "Умное кадрирование", "framing_hint": "Держит лицо в кадре с помощью цифрового зума", "framing_zoom": "Приближение", "gestures": "Жесты рукой", "gestures_hint": "Открытая ладонь 1 с: слежение вкл/выкл · Кулак 1 с: стоп", "gimbal_auto": "Автоподключение", "ev_track_on": "✋ Слежение включено", "ev_track_off": "✋ Слежение выключено", "ev_stop": "✊ Остановлено", "webcam_card": "Веб-камера"});
+Object.assign(window.I18N.zh, {"stream_q": "画面", "mirror": "镜像", "framing": "智能取景", "framing_hint": "用数字变焦让人脸始终保持在画面中", "framing_zoom": "远近", "gestures": "手势控制", "gestures_hint": "张开手掌 1 秒：开关跟踪 · 握拳 1 秒：停止", "gimbal_auto": "自动连接", "ev_track_on": "✋ 跟踪已开启", "ev_track_off": "✋ 跟踪已关闭", "ev_stop": "✊ 已停止", "webcam_card": "摄像头"});
+Object.assign(window.I18N.ar, {"stream_q": "الفيديو", "mirror": "عكس الصورة", "framing": "تأطير ذكي", "framing_hint": "يبقي وجهك في الإطار بالتكبير الرقمي", "framing_zoom": "القرب", "gestures": "إيماءات اليد", "gestures_hint": "راحة يد مفتوحة ثانية: تشغيل/إيقاف التتبع · قبضة ثانية: إيقاف", "gimbal_auto": "اتصال تلقائي", "ev_track_on": "✋ تم تشغيل التتبع", "ev_track_off": "✋ تم إيقاف التتبع", "ev_stop": "✊ تم الإيقاف", "webcam_card": "كاميرا الويب"});

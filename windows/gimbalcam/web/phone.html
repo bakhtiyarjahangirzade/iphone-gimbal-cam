@@ -90,8 +90,9 @@ const QUALITY = {
   "1080p30": { width: 1920, height: 1080, frameRate: 30, bitrate: 20_000_000 },
   "720p60":  { width: 1280, height: 720,  frameRate: 60, bitrate: 12_000_000 },
 };
-const PREVIEW_FPS = 30;
-const PREVIEW_BITRATE = 4_000_000;
+// Live webcam stream (chosen on the PC): 720p/1080p at 30/60 fps
+let PREVIEW_FPS = 30, PREVIEW_SHORT = 1080;
+const previewBitrate = () => (PREVIEW_SHORT >= 1080 ? 8_000_000 : 4_000_000) * (PREVIEW_FPS > 30 ? 1.5 : 1);
 
 let ws, stream = null, track = null, quality = "4k30";
 let encoder = null, canvas = null, ctx = null, encW = 0, encH = 0;
@@ -184,6 +185,11 @@ function handleCmd(c) {
     case "quality": if (QUALITY[c.value]) changeQuality(c.value); break;
     case "status": sendHello(); break;
     case "lang": applyLang(c.value); break;
+    case "stream":
+      PREVIEW_SHORT = c.res === "720p" ? 720 : 1080;
+      PREVIEW_FPS = +c.fps === 60 ? 60 : 30;
+      encW = 0;   // force encoder rebuild with the new size/rate
+      break;
     case "pause": paused = !!c.value; $("pausedOv").style.display = paused ? "grid" : "none"; needKey = true; break;
   }
 }
@@ -270,8 +276,9 @@ function onChunk(chunk, meta) {
 
 let encAttempt = 0;
 function encoderConfigs(w, h) {
-  const base = { width: w, height: h, bitrate: PREVIEW_BITRATE, framerate: PREVIEW_FPS, latencyMode: "realtime" };
+  const base = { width: w, height: h, bitrate: previewBitrate(), framerate: PREVIEW_FPS, latencyMode: "realtime" };
   return [
+    { ...base, codec: "avc1.640033", hardwareAcceleration: "prefer-hardware", avc: { format: "annexb" } },
     { ...base, codec: "avc1.640028", hardwareAcceleration: "prefer-hardware", avc: { format: "annexb" } },
     { ...base, codec: "avc1.640028", avc: { format: "annexb" } },
     { ...base, codec: "avc1.42001f", avc: { format: "annexb" } },
@@ -287,7 +294,7 @@ function setupEncoder(w, h) {
   ctx = canvas.getContext("2d", { alpha: false });
   const configs = encoderConfigs(w, h);
   const enc = new VideoEncoder({
-    output: (c, m) => { encOk = true; onChunk(c, m); },
+    output: (c, m) => { encOk = true; lastChunkT = Date.now(); onChunk(c, m); },
     error: e => {
       if (encoder !== enc) return;
       if (!encOk && encAttempt < configs.length - 1) { encAttempt++; setupEncoder(encW, encH); return; }
@@ -304,12 +311,21 @@ function setupEncoder(w, h) {
 let encOk = false, encVp8 = false;
 const capTimes = new Map();
 
+// One frame loop at a time (a new generation cancels the old one after camera restarts)
+let loopGen = 0, lastFrameT = 0, lastChunkT = 0, running = false;
+function startFrameLoop() {
+  const gen = ++loopGen;
+  const cb = now => { if (gen !== loopGen) return; video.requestVideoFrameCallback(cb); onVideoFrame(now); };
+  video.requestVideoFrameCallback(cb);
+}
+
 function onVideoFrame(now) {
-  video.requestVideoFrameCallback(onVideoFrame);
+  lastFrameT = Date.now();
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw || !vh) return;
   const landscape = vw >= vh;
-  const w = landscape ? 1280 : 720, h = landscape ? 720 : 1280;
+  const longS = Math.round(PREVIEW_SHORT * 16 / 9 / 2) * 2;
+  const w = landscape ? longS : PREVIEW_SHORT, h = landscape ? PREVIEW_SHORT : longS;
   if (w !== encW || h !== encH || !encoder || encoder.state === "closed") setupEncoder(w, h);
   if (!wsOpen() || paused) return;
   if (now - lastEnc < 1000 / PREVIEW_FPS - 4) return;
@@ -407,15 +423,50 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 $("recBtn").onclick = () => recorder && !recStopped ? stopRec() : startRec();
 $("quality").onchange = e => changeQuality(e.target.value);
 
-$("startBtn").onclick = async () => {
-  if (!window.VideoEncoder) { toast(T("no_wc"), 6000); }
+async function begin(fromButton) {
+  if (running) return;
+  if (!window.VideoEncoder) toast(T("no_wc"), 6000);
   try { await openCamera(); }
-  catch (e) { toast(T("cam_err") + ": " + e.message, 6000); return; }
+  catch (e) { if (fromButton) toast(T("cam_err") + ": " + e.message, 6000); return; }
+  running = true;
   $("start").style.display = "none";
   keepAwake();
-  video.requestVideoFrameCallback(onVideoFrame);
+  startFrameLoop();
   connectWS();
-};
+}
+$("startBtn").onclick = () => begin(true);
+
+// ---------------- Self-healing watchdog ----------------
+// Camera track died (call, Control Center, Safari hiccup) or frames stopped -> reopen camera.
+// Frames arrive but the encoder produces nothing -> rebuild the encoder.
+let recovering = false;
+async function recoverCamera() {
+  if (recovering) return;
+  recovering = true;
+  try {
+    if (recorder && !recStopped) stopRec();
+    await openCamera();
+    startFrameLoop();
+    needKey = true;
+  } catch (e) { /* try again on the next tick */ }
+  finally { recovering = false; }
+}
+setInterval(() => {
+  if (!running || document.visibilityState !== "visible") return;
+  const now = Date.now();
+  const dead = !track || track.readyState === "ended" || track.muted;
+  if (dead || now - lastFrameT > 3000) { recoverCamera(); return; }
+  if (wsOpen() && !paused && now - lastFrameT < 1000 && encW && now - lastChunkT > 3000) {
+    lastChunkT = now;
+    setupEncoder(encW, encH);
+  }
+}, 1500);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && running) { needKey = true; lastFrameT = Date.now(); }
+});
+
+// Start automatically when the page opens from the QR code (button stays as a fallback).
+begin(false);
 applyLang();
 window.addEventListener("beforeunload", e => { if (recorder || recQueue.length) { e.preventDefault(); e.returnValue = ""; } });
 </script>

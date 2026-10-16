@@ -107,3 +107,5 @@ kbd{border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padd
 .tabs a{height:28px;padding:0 12px;border-radius:7px;color:var(--mut);font-weight:600;font-size:13px;display:inline-flex;align-items:center;text-decoration:none}
 .tabs a.sel{background:var(--panel2);color:var(--fg);box-shadow:0 0 0 1px var(--line2)}
 .tabs a:hover{color:var(--fg)}
+.toast{position:fixed;left:50%;top:70px;transform:translate(-50%,-20px);background:var(--panel2);border:1px solid var(--line2);color:var(--fg);font-weight:700;padding:10px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:20}
+.toast.show{opacity:1;transform:translate(-50%,0)}

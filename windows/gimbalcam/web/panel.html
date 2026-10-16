@@ -10,7 +10,6 @@
 <div class="app">
   <header class="top">
     <div class="brand"><div class="logo"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M3 12h3M18 12h3M12 3v3M12 18v3"/></svg></div>GimbalCam</div>
-    <nav class="tabs"><a href="/" class="sel" data-i="tab_camera"></a><a href="/scan" data-i="tab_scan"></a></nav>
     <span class="pill"><span class="dot" id="phoneDot"></span><span data-i="phone"></span> <b id="phoneTxt"></b></span>
     <span class="pill"><span class="dot" id="gimbalDot"></span><span data-i="gimbal"></span> <b id="gimbalTxt"></b></span>
     <span class="pill"><span data-i="latency"></span> <b id="latTxt">—</b> · <b id="fpsTxt">0</b> fps</span>
@@ -63,6 +62,33 @@
 
     <aside class="side">
       <div class="card">
+        <h3><span data-i="webcam_card"></span><span class="st"><span class="dot" id="vDot"></span><span id="vFps"></span></span></h3>
+        <div class="row">
+          <label class="toggle"><input type="checkbox" data-k="vcam_on"><span class="sw"></span><span data-i="vcam_on"></span></label>
+          <div class="spacer"></div>
+          <div class="seg" id="vcamSize"><button data-v="1080p">1080p</button><button data-v="720p">720p</button></div>
+        </div>
+        <div class="row">
+          <span class="lbl" data-i="stream_q"></span>
+          <div class="spacer"></div>
+          <div class="seg" id="streamRes"><button data-v="1080p">1080p</button><button data-v="720p">720p</button></div>
+          <div class="seg" id="streamFps"><button data-v="30">30</button><button data-v="60">60</button></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <label class="toggle"><input type="checkbox" data-k="framing"><span class="sw"></span><span class="t"><span data-i="framing"></span><small data-i="framing_hint"></small></span></label>
+        </div>
+        <div class="slider" id="zoomRow"><label data-i="framing_zoom"></label><input type="range" min="1" max="2.5" step="0.05" data-k="framing_zoom" data-f="x"><output></output></div>
+        <div class="row" style="margin-top:10px">
+          <label class="toggle"><input type="checkbox" data-k="mirror"><span class="sw"></span><span data-i="mirror"></span></label>
+        </div>
+        <div class="row">
+          <label class="toggle"><input type="checkbox" data-k="gestures"><span class="sw"></span><span class="t"><span data-i="gestures"></span><small data-i="gestures_hint"></small></span></label>
+        </div>
+        <div class="hint" data-i="vcam_hint"></div>
+        <div class="err" id="vErr" style="display:none" data-i="vcam_error"></div>
+      </div>
+
+      <div class="card">
         <h3><span data-i="gimbal_card"></span><span class="st"><span class="dot" id="gDot2"></span><span id="gStatus"></span></span></h3>
         <div class="row">
           <button class="btn primary" id="gConnect"></button>
@@ -76,6 +102,9 @@
           <span></span><button data-d="down">▼</button><span></span>
         </div>
         <div class="slider"><label data-i="manual_speed"></label><input type="range" min="0.05" max="1" step="0.01" data-k="manual_speed"><output></output></div>
+        <div class="row" style="margin-top:10px">
+          <label class="toggle"><input type="checkbox" data-k="gimbal_auto"><span class="sw"></span><span data-i="gimbal_auto"></span></label>
+        </div>
       </div>
 
       <div class="card">
@@ -103,16 +132,6 @@
         </div>
       </div>
 
-      <div class="card">
-        <h3><span data-i="vcam"></span><span class="st"><span class="dot" id="vDot"></span></span></h3>
-        <div class="row">
-          <label class="toggle"><input type="checkbox" data-k="vcam_on"><span class="sw"></span><span data-i="vcam_on"></span></label>
-          <div class="spacer"></div>
-          <div class="seg" id="vcamSize"><button data-v="1080p">1080p</button><button data-v="720p">720p</button></div>
-        </div>
-        <div class="hint" data-i="vcam_hint"></div>
-        <div class="err" id="vErr" style="display:none" data-i="vcam_error"></div>
-      </div>
     </aside>
   </div>
 
@@ -124,6 +143,7 @@
     <span><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> <span data-i="k_track"></span></span>
   </footer>
 </div>
+<div class="toast" id="toast"></div>
 <div class="disc" id="disc"><span data-i="disconnected"></span></div>
 
 <script src="/i18n.js"></script>
@@ -163,7 +183,7 @@ const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
 
 // ---------- render ----------
 const fmt = {
-  pct: v => Math.round(v * 100) + "%", f1: v => (+v).toFixed(1), f2: v => (+v).toFixed(2), ms: v => Math.round(v * 1000) + " ms",
+  pct: v => Math.round(v * 100) + "%", x: v => (+v).toFixed(2) + "×", f1: v => (+v).toFixed(1), f2: v => (+v).toFixed(2), ms: v => Math.round(v * 1000) + " ms",
   def: v => Math.round(v * 100) + "%",
 };
 function setRange(el, v) {
@@ -222,8 +242,21 @@ function render(s) {
   document.querySelectorAll("input[type=range][data-k]").forEach(el => setRange(el, s.settings[el.dataset.k]));
   document.querySelectorAll("input[type=checkbox][data-k]").forEach(el => el.checked = !!s.settings[el.dataset.k]);
   selSeg($("vcamSize"), s.settings.vcam_size);
+  selSeg($("streamRes"), s.settings.stream_res);
+  selSeg($("streamFps"), s.settings.stream_fps);
+  $("zoomRow").style.display = s.settings.framing ? "grid" : "none";
+  $("vFps").textContent = s.vcam.ok ? s.vcam.fps + " fps" : "";
+  if (s.gesture && s.gesture.t !== lastGesture) {
+    if (lastGesture !== null) showToast(t("ev_" + s.gesture.name));
+    lastGesture = s.gesture.t;
+  }
   $("vDot").className = "dot " + (s.vcam.ok ? "ok" : s.vcam.ok === false ? "bad" : "");
   $("vErr").style.display = s.vcam.ok === false ? "block" : "none";
+}
+let lastGesture = null;
+function showToast(msg) {
+  const el = $("toast"); el.textContent = msg; el.classList.add("show");
+  clearTimeout(showToast.t); showToast.t = setTimeout(() => el.classList.remove("show"), 2200);
 }
 const esc = x => String(x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -247,6 +280,8 @@ $("trackSeg").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: 
 $("presets").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "preset", value: v }); };
 $("gModes").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "gimbal_mode", value: v }); };
 $("vcamSize").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "set", key: "vcam_size", value: v }); };
+$("streamRes").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "set", key: "stream_res", value: v }); };
+$("streamFps").onclick = e => { const v = e.target.dataset.v; if (v) send({ cmd: "set", key: "stream_fps", value: +v }); };
 document.querySelectorAll("input[type=range][data-k]").forEach(el => {
   el.addEventListener("pointerdown", () => el.dataset.dragging = "1");
   el.addEventListener("pointerup", () => delete el.dataset.dragging);
