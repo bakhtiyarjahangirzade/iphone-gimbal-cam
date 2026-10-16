@@ -7,7 +7,6 @@ iPhone 15 Pro Max'i Windows'ta yüksek kaliteli webcam olarak kullanmak ve Zhiyu
 | Klasör | Ne yapar |
 |---|---|
 | `windows/` | **Ana uygulama.** Ekranda QR gösterir; iPhone Safari ile bağlanır (uygulama kurmadan). 720p canlı önizleme, kafa/vücut takibi, gimbal kontrolü, sanal webcam; telefonda 4K30 kayıt ve otomatik aktarım (`Videolar\GimbalCam`) |
-| `ios-scan/` | **GimbalScan** iPhone uygulaması: LiDAR ile oda taraması (Apple RoomPlan: duvar/kapı/pencere/eşya + detaylı LiDAR mesh), canlı olarak PC'ye akış |
 | `ios/` | İsteğe bağlı yerli iPhone kamera uygulaması (4K60 kayıt için ileride) |
 | `tools/gimbal-test.html` | Tarayıcıdan (Chrome/Edge) gimbal test aracı |
 
@@ -25,14 +24,10 @@ iPhone 15 Pro Max'i Windows'ta yüksek kaliteli webcam olarak kullanmak ve Zhiyu
 3. **Kamerayı başlat** → görüntü bilgisayardaki panelde. Gimbale bağlan, takibi aç.
    - Kısayollar: ok tuşları = gimbal, **Esc = DURDUR**, R = kayıt, P = duraklat, 1/2/3 = takip modu.
    - Dil: Türkçe, English, Español, Русский, 中文, العربية (sağ üstten).
+   - **Webcam kartı:** görüntü 720p/1080p · 30/60 fps, **akıllı kadraj** (yüzü dijital zoom ile kadrajda tutar), ayna, **el hareketleri** (avuç içi 1 sn = takip aç/kapa, yumruk 1 sn = durdur).
+   - Sanal kamera sabit hızda çalışır; telefon koparsa Zoom/Teams donmaz, “telefon bekleniyor” ekranı görünür ve telefon dönünce kendiliğinden devam eder.
+   - Gimbal **Otomatik bağlan** açıkken uygulama açılınca bağlanır, koparsa yeniden dener.
 4. Sanal webcam için [OBS Studio](https://obsproject.com) kurulu olmalı; Zoom/Teams'te “OBS Virtual Camera” seç.
-
-## 3D Tarama (LiDAR)
-
-1. Releases'ten `GimbalScan.ipa` indir → Sideloadly ile iPhone'a yükle (ücretsiz Apple ID).
-2. GimbalCam panelinde **3D Tarama** sekmesi → GimbalScan uygulamasıyla QR'ı okut.
-3. **Taramayı başlat** → gimbale bağlan → **360° başlat**: gimbal +20°, 0°, −20° seviyelerinde tam tur döner (açı LiDAR konumundan okunur).
-4. **Bitir** → `Belgeler\GimbalScan\Tarama_...` klasörüne: `Oda_*.usdz`, `kat_plani.svg`, `oda.json`, `mesh.obj`, `mesh.ply`.
 
 ## iOS derleme
 
